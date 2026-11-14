@@ -50,7 +50,7 @@ const apiLimiter = rateLimit({
 app.use("/api", apiLimiter);
 
 // ---- Health check ----
-app.get("/api/health", (_req, res) => {
+app.get("/", (_req, res) => {
   res.json({
     success: true,
     message: "Shopora API is running",
