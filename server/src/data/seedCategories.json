@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Clothing & Fashion",
+    "slug": "Clothing & Fashion",
+    "description": "Dhakai Jamdani, cotton sarees, Benarasi, designer Panjabi, and Kabli sets"
+  },
+  {
+    "name": "Home & Kitchen",
+    "slug": "Home & Kitchen",
+    "description": "Ceramic dinner sets, handcrafted Nakshi Kantha, brass showpieces, and pottery"
+  },
+  {
+    "name": "Leather & Accessories",
+    "slug": "Leather & Accessories",
+    "description": "100% genuine leather wallets, premium belts, card holders, and office bags"
+  },
+  {
+    "name": "Organic & Food Items",
+    "slug": "Organic & Food Items",
+    "description": "Natural pure Sundarbans honey, desi ghee, cold-pressed oil, and organic chia seeds"
+  },
+  {
+    "name": "Electronics & Gadgets",
+    "slug": "Electronics & Gadgets",
+    "description": "AMOLED smartwatches, ANC Bluetooth headphones, TWS earbuds, and portable speakers"
+  },
+  {
+    "name": "Featured & Trending",
+    "slug": "Featured",
+    "description": "Customers' most-loved hot deals and top-selling popular products"
+  }
+]

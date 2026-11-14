@@ -1,0 +1,6 @@
+{
+  "name": "Shopora",
+  "description": "Bangladeshi modern e-commerce platform with direct cash-on-delivery ordering and real-time admin management dashboard",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
