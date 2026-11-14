@@ -4,10 +4,29 @@ import { fetchStoreContactSettingsApi } from "../services/api";
 
 const getWhatsAppChatNumber = (phone: string): string | null => {
   let digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("00")) digits = digits.slice(2);
-  else if (digits.startsWith("0")) digits = `88${digits.slice(1)}`;
 
-  return digits.length >= 7 && digits.length <= 15 ? digits : null;
+  // Remove international dialing prefix
+  if (digits.startsWith("00")) {
+    digits = digits.slice(2);
+  }
+
+  // Convert local format: 017XXXXXXXX -> 88017XXXXXXXX
+  if (digits.startsWith("01")) {
+    digits = `88${digits}`;
+  }
+
+  // Convert 88 prefix: 881XXXXXXXXX -> 8801XXXXXXXXX
+  else if (digits.startsWith("88") && !digits.startsWith("880")) {
+    digits = `880${digits.slice(2)}`;
+  }
+
+  // Convert 1XXXXXXXXX -> 8801XXXXXXXXX
+  else if (digits.startsWith("1") && digits.length === 10) {
+    digits = `880${digits}`;
+  }
+
+  // Validate Bangladesh mobile number
+  return /^8801[3-9]\d{8}$/.test(digits) ? digits : null;
 };
 
 export const FloatingWhatsAppButton: React.FC = () => {
