@@ -9,22 +9,32 @@ import {
 import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { recordActivity } from '../utils/activityLog.js';
+import { Product } from '../models/Product.js';
+import { Types } from 'mongoose';
 
 /* ---------------- Reviews ---------------- */
 
 // Public — reviews are shown to every visitor on the homepage
-export const getReviews = asyncHandler(async (_req: AuthRequest, res: Response) => {
-  const reviews = await Review.find().sort({ createdAt: -1 });
+export const getReviews = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const productId = req.query.productId;
+  const filter: Record<string, unknown> = {};
+  if (productId !== undefined) {
+    if (typeof productId !== 'string' || !Types.ObjectId.isValid(productId)) {
+      throw new AppError('Invalid product ID', 400);
+    }
+    filter.productId = new Types.ObjectId(productId);
+  }
+  const reviews = await Review.find(filter).sort({ createdAt: -1 }).lean();
   res.json({ success: true, count: reviews.length, reviews });
 });
 
 const reviewSchema = z.object({
   customerName: z.string().min(1).max(100),
   customerLocation: z.string().max(100).optional(),
-  productName: z.string().max(150).optional(),
-  rating: z.number().min(1).max(5),
+  productId: z.string().min(1),
+  rating: z.number().int().min(1).max(5),
   comment: z.string().max(1000).optional(),
-  image: z.string().min(1),
+  image: z.string().max(5_000_000).optional(),
   imageAlt: z.string().optional(),
 });
 
@@ -34,7 +44,17 @@ export const createReview = asyncHandler(async (req: AuthRequest, res: Response)
   if (!parsed.success) {
     throw new AppError(`Invalid review data: ${parsed.error.issues[0]?.message || 'validation failed'}`, 400);
   }
-  const review = await Review.create({ ...parsed.data, date: new Date().toISOString().split('T')[0] });
+  if (!Types.ObjectId.isValid(parsed.data.productId)) throw new AppError('Invalid product ID', 400);
+  const product = await Product.findById(parsed.data.productId).select('name');
+  if (!product) throw new AppError('Product not found', 404);
+  const { productId, ...reviewData } = parsed.data;
+  const review = await Review.create({
+    ...reviewData,
+    productId: product._id,
+    productName: product.name,
+    date: new Date().toISOString().slice(0, 10),
+    verified: true,
+  });
   await recordActivity(req, {
     actionType: 'create',
     module: 'reviews',
@@ -46,14 +66,52 @@ export const createReview = asyncHandler(async (req: AuthRequest, res: Response)
   res.status(201).json({ success: true, review });
 });
 
+const customerReviewSchema = z.object({
+  customerName: z.string().trim().min(1).max(100),
+  productId: z.string().min(1),
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().min(1).max(1000),
+  image: z.string().max(5_000_000).optional(),
+  imageAlt: z.string().max(200).optional(),
+});
+
+export const createCustomerReview = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const parsed = customerReviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new AppError(`Invalid review data: ${parsed.error.issues[0]?.message || 'validation failed'}`, 400);
+  }
+  if (!Types.ObjectId.isValid(parsed.data.productId)) throw new AppError('Invalid product ID', 400);
+  const product = await Product.findById(parsed.data.productId).select('name');
+  if (!product) throw new AppError('Product not found', 404);
+  const { productId, ...reviewData } = parsed.data;
+  const review = await Review.create({
+    ...reviewData,
+    productId: product._id,
+    productName: product.name,
+    date: new Date().toISOString().slice(0, 10),
+  });
+  res.status(201).json({ success: true, review });
+});
+
 export const updateReview = asyncHandler(async (req: AuthRequest, res: Response) => {
   const parsed = reviewSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     throw new AppError(`Invalid review data: ${parsed.error.issues[0]?.message || 'validation failed'}`, 400);
   }
+  if (parsed.data.productId && !Types.ObjectId.isValid(parsed.data.productId)) {
+    throw new AppError('Invalid product ID', 400);
+  }
   const previous = await Review.findById(req.params.id);
   if (!previous) throw new AppError('Review not found', 404);
-  const review = await Review.findByIdAndUpdate(req.params.id, parsed.data, {
+  const { productId, ...reviewData } = parsed.data;
+  const updateData: Record<string, unknown> = { ...reviewData };
+  if (productId) {
+    const product = await Product.findById(productId).select('name');
+    if (!product) throw new AppError('Product not found', 404);
+    updateData.productId = product._id;
+    updateData.productName = product.name;
+  }
+  const review = await Review.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
     runValidators: true,
   });

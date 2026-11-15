@@ -42,6 +42,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             100,
         )
       : null;
+  const reviewCount = product.reviewCount ?? 0;
+  const averageRating = reviewCount > 0 ? product.ratingAverage ?? 0 : 0;
 
   return (
     <article
@@ -119,9 +121,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             >
               {product.name}
             </h3>
-            <div className="flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 bg-amber-50/90 border border-amber-200/70 shadow-xs px-1.5 py-0.5 rounded-md shrink-0">
+            <div
+              title={`${reviewCount} ${reviewCount === 1 ? "review" : "reviews"}`}
+              className="flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 bg-amber-50/90 border border-amber-200/70 shadow-xs px-1.5 py-0.5 rounded-md shrink-0"
+            >
               <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-              <span>4.9</span>
+              <span>{averageRating.toFixed(1)} ({reviewCount})</span>
             </div>
           </div>
 

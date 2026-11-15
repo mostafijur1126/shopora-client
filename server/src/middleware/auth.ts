@@ -2,7 +2,10 @@ import { Request, Response, NextFunction } from "express";
 import { verifyToken, JwtPayload } from "../config/jwt.js";
 import { Staff, normalizeStaffRole } from "../models/Staff.js";
 import { User } from "../models/User.js";
-import { AdminPermission, roleHasPermission } from "../config/rolePermissions.js";
+import {
+  AdminPermission,
+  roleHasPermission,
+} from "../config/rolePermissions.js";
 import { AppError } from "./errorHandler.js";
 import type { ActivityActor } from "../utils/activityLog.js";
 
@@ -32,7 +35,9 @@ export const protect = async (
 
   if (payload.role === "staff") {
     if (payload.staffRole) {
-      const staff = await Staff.findById(payload.userId).select("status role name");
+      const staff = await Staff.findById(payload.userId).select(
+        "status role name",
+      );
       if (!staff || staff.status !== "active") {
         return next(
           new AppError("Staff account is inactive or no longer exists", 401),
@@ -71,6 +76,22 @@ export const protect = async (
 
   req.user = payload;
   next();
+};
+
+export const optionalProtect = async (
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+) => {
+  const header = req.headers.authorization;
+
+  //No token : continue as guest
+  if (!header || !header.startsWith("Bearer ")) {
+    return next();
+  }
+
+  //Token exists: validate it normally
+  return protect(req, _res, next);
 };
 
 export const requirePermission =

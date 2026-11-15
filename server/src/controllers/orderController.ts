@@ -59,9 +59,14 @@ const getCallerFromRequest = async (req: AuthRequest) => {
 
   if (caller.role === "staff") {
     if (caller.staffRole) {
-      const staff = await Staff.findById(caller.userId).select("status role name");
+      const staff = await Staff.findById(caller.userId).select(
+        "status role name",
+      );
       if (!staff || staff.status !== "active") {
-        throw new AppError("Staff account is inactive or no longer exists", 401);
+        throw new AppError(
+          "Staff account is inactive or no longer exists",
+          401,
+        );
       }
       caller.staffRole = normalizeStaffRole(staff.role);
       setAuditActor(req, {
@@ -76,7 +81,10 @@ const getCallerFromRequest = async (req: AuthRequest) => {
         isActive: true,
       }).select("_id name");
       if (!user) {
-        throw new AppError("Staff account is inactive or no longer exists", 401);
+        throw new AppError(
+          "Staff account is inactive or no longer exists",
+          401,
+        );
       }
       setAuditActor(req, {
         id: String(user._id),
@@ -114,6 +122,7 @@ const generateInvoiceId = async (): Promise<string> => {
 export const createOrder = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const caller = await getCallerFromRequest(req);
+
     const isStaff = caller?.role === "admin" || caller?.role === "staff";
 
     const parsed = orderSchema.safeParse(req.body);
@@ -136,7 +145,10 @@ export const createOrder = asyncHandler(
       throw new AppError("Please select a delivery district", 400);
     }
     if (!isStaff && data.paymentMethod !== "cod") {
-      throw new AppError("Cash on delivery is the only available payment method", 400);
+      throw new AppError(
+        "Cash on delivery is the only available payment method",
+        400,
+      );
     }
 
     let customerId: string | undefined;
@@ -167,16 +179,24 @@ export const createOrder = asyncHandler(
     } else if (!isStaff) {
       const identity = guestIdentitySchema.safeParse(req.body?.guestIdentity);
       if (!identity.success) {
-        throw new AppError("Guest checkout session expired; refresh and try again", 400);
+        throw new AppError(
+          "Guest checkout session expired; refresh and try again",
+          400,
+        );
       }
       guestId = identity.data.guestId;
-      let customer = await Customer.findOne({ guestId }).select("+guestId +guestSecretHash");
+      let customer = await Customer.findOne({ guestId }).select(
+        "+guestId +guestSecretHash",
+      );
       if (customer) {
         if (
           !customer.guestSecretHash ||
           !matchesGuestSecret(identity.data.secret, customer.guestSecretHash)
         ) {
-          throw new AppError("Guest checkout session could not be verified", 403);
+          throw new AppError(
+            "Guest checkout session could not be verified",
+            403,
+          );
         }
         customer.name = data.customerName;
         customer.phone = data.phone;
@@ -235,7 +255,10 @@ export const createOrder = asyncHandler(
           availableColors.length &&
           !availableColors.includes(item.selectedColor))
       ) {
-        throw new AppError(`Invalid variant selected for "${product.name}"`, 400);
+        throw new AppError(
+          `Invalid variant selected for "${product.name}"`,
+          400,
+        );
       }
       if (!product.inStock || (product.stockQty ?? 0) < item.quantity) {
         throw new AppError(
@@ -335,6 +358,7 @@ export const createOrder = asyncHandler(
       orderPersisted = true;
       if (isStaff) {
         const itemSummary = `${lines.length} item${lines.length === 1 ? "" : "s"}`;
+
         await recordActivity(req, {
           actionType: "create",
           module: "orders",
@@ -384,7 +408,8 @@ export const updateOrderStatus = asyncHandler(
       await recordActivity(req, {
         actionType: "status_change",
         module: "orders",
-        description: `Changed order ${order.invoiceId || ""} status from "${previous.status}" to "${order.status}".`.trim(),
+        description:
+          `Changed order ${order.invoiceId || ""} status from "${previous.status}" to "${order.status}".`.trim(),
         targetId: String(order._id),
         targetName: order.invoiceId,
         previousValues: { status: previous.status },
@@ -415,7 +440,8 @@ export const updateOrder = asyncHandler(
     });
     if (!order) throw new AppError("Order not found", 404);
     const hasChanges = Object.keys(parsed.data).some(
-      (key) => JSON.stringify(previous.get(key)) !== JSON.stringify(order.get(key)),
+      (key) =>
+        JSON.stringify(previous.get(key)) !== JSON.stringify(order.get(key)),
     );
     if (hasChanges) {
       const statusChanged = previous.status !== order.status;

@@ -980,15 +980,51 @@ export default function App() {
     }
   };
 
+  const refreshProductReviewStats = useCallback(async () => {
+    try {
+      const refreshedProducts = await fetchProducts();
+      setProducts(refreshedProducts);
+      setSelectedProduct((current) =>
+        current
+          ? refreshedProducts.find((product) => product.id === current.id) ||
+            current
+          : null,
+      );
+    } catch (error) {
+      console.error("Could not refresh product review ratings", error);
+    }
+  }, []);
+
+  const handleReviewAdded = useCallback((review: ReviewScreenshot) => {
+    setReviews((previous) => [review, ...previous]);
+  }, []);
+
+  const handleReviewStatsChange = useCallback(
+    (productId: string, ratingAverage: number, reviewCount: number) => {
+      const updateStats = (product: Product): Product =>
+        product.id === productId
+          ? { ...product, ratingAverage, reviewCount }
+          : product;
+      setProducts((previous) => previous.map(updateStats));
+      setSelectedProduct((previous) =>
+        previous?.id === productId ? updateStats(previous) : previous,
+      );
+    },
+    [],
+  );
+
   // ---------------- Reviews ----------------
 
   const handleAddReview = async (newReview: ReviewScreenshot) => {
     try {
       const saved = await createReviewApi(newReview);
       setReviews((prev) => [saved, ...prev]);
+      await refreshProductReviewStats();
       showToast("নতুন কাস্টমার রিভিউ স্ক্রিনশট সফলভাবে যোগ করা হয়েছে!");
+      return saved;
     } catch (err) {
       showApiError(err, "রিভিউ যোগ করা যায়নি");
+      throw err;
     }
   };
 
@@ -998,9 +1034,12 @@ export default function App() {
       setReviews((prev) =>
         prev.map((r) => (r.id === updatedReview.id ? saved : r)),
       );
+      await refreshProductReviewStats();
       showToast("রিভিউ আপডেট করা হয়েছে!");
+      return saved;
     } catch (err) {
       showApiError(err, "রিভিউ আপডেট করা যায়নি");
+      throw err;
     }
   };
 
@@ -1008,9 +1047,11 @@ export default function App() {
     try {
       await deleteReviewApi(reviewId);
       setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+      await refreshProductReviewStats();
       showToast("রিভিউ স্ক্রিনশট মুছে ফেলা হয়েছে");
     } catch (err) {
       showApiError(err, "রিভিউ মুছে ফেলা যায়নি");
+      throw err;
     }
   };
 
@@ -1163,6 +1204,10 @@ export default function App() {
             onDirectOrder={handleOpenDirectOrder}
             onSelectProduct={handleOpenProductDetail}
             onNotifyStockRequest={handleNotifyStockRequest}
+            canDeleteReviews={Boolean(getToken())}
+            onDeleteReview={handleDeleteReview}
+            onReviewAdded={handleReviewAdded}
+            onReviewStatsChange={handleReviewStatsChange}
             onBack={() => setActiveScreen("home")}
           />
         )}

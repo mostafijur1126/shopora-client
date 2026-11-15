@@ -125,14 +125,20 @@ export const CustomerReviewSlider: React.FC<CustomerReviewSliderProps> = ({ revi
                 onClick={() => setSelectedReview(rev)}
                 title="View screenshot in full size"
               >
-                <img
-                  src={rev.image}
-                  alt={rev.imageAlt || `${rev.customerName} 's review screenshot`}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-500"
-                  loading="lazy"
-                  decoding="async"
-                />
+                {rev.image ? (
+                  <img
+                    src={rev.image}
+                    alt={rev.imageAlt || `${rev.customerName}'s review image`}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-500"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
+                    No photo attached
+                  </div>
+                )}
 
                 {/* Dark Gradient Overlay on Hover */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex items-end justify-between p-2.5">
@@ -209,7 +215,7 @@ export const CustomerReviewSlider: React.FC<CustomerReviewSliderProps> = ({ revi
                     onClick={() => setSelectedReview(rev)}
                     className="text-[10px] text-[#00503a] hover:underline font-semibold flex items-center gap-0.5 cursor-pointer shrink-0"
                   >
-                    <span>Photo</span>
+                    <span>View</span>
                     <Maximize2 className="w-3 h-3" />
                   </button>
                 </div>
@@ -279,14 +285,16 @@ export const CustomerReviewSlider: React.FC<CustomerReviewSliderProps> = ({ revi
 
             {/* Modal Body with Full Screenshot Image */}
             <div className="overflow-y-auto p-4 max-h-[70vh] flex flex-col items-center bg-gray-900/5">
-              <img
-                src={selectedReview.image}
-                alt={selectedReview.imageAlt || selectedReview.customerName}
-                referrerPolicy="no-referrer"
-                loading="lazy"
-                decoding="async"
-                className="rounded-lg object-contain max-h-[55vh] w-auto shadow-md border border-gray-200"
-              />
+              {selectedReview.image && (
+                <img
+                  src={selectedReview.image}
+                  alt={selectedReview.imageAlt || selectedReview.customerName}
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
+                  className="rounded-lg object-contain max-h-[55vh] w-auto shadow-md border border-gray-200"
+                />
+              )}
 
               {/* Review details */}
               <div className="mt-4 w-full bg-white p-4 rounded-xl border border-gray-200 space-y-2">

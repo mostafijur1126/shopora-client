@@ -24,7 +24,9 @@ export interface Product {
   colors?: (string | ColorVariant)[]; // Available colors (e.g. ['Emerald Green'] or [{name: 'Red', hex: '#FF0000'}])
   colorVariants?: ColorVariant[]; // Strongly typed color variants
   hasColors?: boolean; // Enable / Disable Color variants selector
-  hasSizes?: boolean; // Enable / Disable Size options selector
+  hasSizes?: boolean;
+  ratingAverage?: number;
+  reviewCount?: number;
   category: string;
   categoryBn?: string;
   price: number;
@@ -402,10 +404,11 @@ export interface ReviewScreenshot {
   id: string;
   customerName: string;
   customerLocation?: string;
+  productId?: string;
   productName?: string;
   rating: number;
   comment?: string;
-  image: string;
+  image?: string;
   imageAlt?: string;
   date?: string;
   verified?: boolean;

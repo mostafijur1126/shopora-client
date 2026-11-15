@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getReviews,
   createReview,
+  createCustomerReview,
   updateReview,
   deleteReview,
   getActivityLogs,
@@ -18,7 +19,8 @@ import {
 
 const reviewRouter = Router();
 reviewRouter.get('/', getReviews); // public
-reviewRouter.post('/', protect, requirePermission('reviews:manage'), createReview);
+reviewRouter.post('/', createCustomerReview); // public product review submission
+reviewRouter.post('/admin', protect, requirePermission('reviews:manage'), createReview);
 reviewRouter.patch('/:id', protect, requirePermission('reviews:manage'), updateReview);
 reviewRouter.delete('/:id', protect, requirePermission('reviews:manage'), deleteReview);
 

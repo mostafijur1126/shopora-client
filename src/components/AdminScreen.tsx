@@ -188,9 +188,9 @@ interface AdminScreenProps {
   reportExpenses?: ReportExpense[] | null;
   onAddExpense?: (expense: Expense) => void;
   onDeleteExpense?: (expenseId: string) => void;
-  onAddReview: (review: ReviewScreenshot) => void;
-  onUpdateReview: (review: ReviewScreenshot) => void;
-  onDeleteReview: (reviewId: string) => void;
+  onAddReview: (review: ReviewScreenshot) => Promise<unknown>;
+  onUpdateReview: (review: ReviewScreenshot) => Promise<unknown>;
+  onDeleteReview: (reviewId: string) => Promise<unknown>;
   onAddOrder?: (newOrder: OrderItem) => void;
   onUpdateOrder?: (updatedOrder: OrderItem) => void;
   onUpdateOrderStatus?: (orderId: string, status: OrderItem["status"]) => void;

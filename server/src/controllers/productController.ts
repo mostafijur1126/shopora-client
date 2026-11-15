@@ -1,9 +1,40 @@
 import { Response } from "express";
 import { z } from "zod";
 import { Product } from "../models/Product.js";
+import { Review } from "../models/Misc.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { AuthRequest } from "../middleware/auth.js";
 import { recordActivity } from "../utils/activityLog.js";
+
+const addReviewStats = async (products: Awaited<ReturnType<typeof Product.find>>[number][]) => {
+  if (!products.length) return [];
+  const summaries = await Review.aggregate<{
+    _id: unknown;
+    reviewCount: number;
+    ratingAverage: number;
+  }>([
+    { $match: { productId: { $in: products.map((product) => product._id) } } },
+    {
+      $group: {
+        _id: "$productId",
+        reviewCount: { $sum: 1 },
+        ratingAverage: { $avg: "$rating" },
+      },
+    },
+  ]);
+  const byProductId = new Map(
+    summaries.map((summary) => [String(summary._id), summary]),
+  );
+  return products.map((product) => {
+    const data = product.toJSON();
+    const summary = byProductId.get(String(product._id));
+    return {
+      ...data,
+      ratingAverage: summary?.ratingAverage ?? 0,
+      reviewCount: summary?.reviewCount ?? 0,
+    };
+  });
+};
 
 // GET /api/products — list all products (public, anyone can view)
 export const getProducts = asyncHandler(
@@ -19,7 +50,11 @@ export const getProducts = asyncHandler(
     }
 
     const products = await Product.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: products.length, products });
+    res.json({
+      success: true,
+      count: products.length,
+      products: await addReviewStats(products),
+    });
   },
 );
 
@@ -28,7 +63,8 @@ export const getProductById = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const product = await Product.findById(req.params.id);
     if (!product) throw new AppError("Product not found", 404);
-    res.json({ success: true, product });
+    const [productWithStats] = await addReviewStats([product]);
+    res.json({ success: true, product: productWithStats });
   },
 );
 
@@ -183,7 +219,8 @@ export const updateProduct = asyncHandler(
         inStock: product.inStock,
       },
     });
-    res.json({ success: true, product });
+    const [productWithStats] = await addReviewStats([product]);
+    res.json({ success: true, product: productWithStats });
   },
 );
 

@@ -508,10 +508,37 @@ export const fetchReviews = async (): Promise<ReviewScreenshot[]> => {
 export const createReviewApi = async (
   data: Partial<ReviewScreenshot>,
 ): Promise<ReviewScreenshot> => {
-  const res = await request<{ review: any }>("/reviews", {
+  const res = await request<{ review: any }>("/reviews/admin", {
     method: "POST",
     body: JSON.stringify(data),
   });
+  return normalizeId(res.review);
+};
+export const fetchProductReviews = async (
+  productId: string,
+): Promise<ReviewScreenshot[]> => {
+  const res = await request<{ reviews: any[] }>(
+    `/reviews?productId=${encodeURIComponent(productId)}`,
+    {},
+    "none",
+  );
+  return normalizeList(res.reviews);
+};
+export const createCustomerReviewApi = async (
+  data: {
+    productId: string;
+    customerName: string;
+    rating: number;
+    comment: string;
+    image?: string;
+    imageAlt?: string;
+  },
+): Promise<ReviewScreenshot> => {
+  const res = await request<{ review: any }>(
+    "/reviews",
+    { method: "POST", body: JSON.stringify(data) },
+    "none",
+  );
   return normalizeId(res.review);
 };
 export const updateReviewApi = async (

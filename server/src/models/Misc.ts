@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IExpense extends Document {
   title: string;
@@ -34,10 +34,11 @@ export const Expense = model<IExpense>('Expense', expenseSchema);
 export interface IReview extends Document {
   customerName: string;
   customerLocation?: string;
+  productId?: Types.ObjectId;
   productName?: string;
   rating: number;
   comment?: string;
-  image: string;
+  image?: string;
   imageAlt?: string;
   date?: string;
   verified?: boolean;
@@ -48,16 +49,19 @@ const reviewSchema = new Schema<IReview>(
   {
     customerName: { type: String, required: true, trim: true, maxlength: 100 },
     customerLocation: { type: String, trim: true, maxlength: 100 },
+    productId: { type: Schema.Types.ObjectId, ref: 'Product' },
     productName: { type: String, trim: true, maxlength: 150 },
     rating: { type: Number, required: true, min: 1, max: 5 },
     comment: { type: String, trim: true, maxlength: 1000 },
-    image: { type: String, required: true },
+    image: { type: String },
     imageAlt: { type: String, trim: true },
     date: { type: String },
     verified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
+
+reviewSchema.index({ productId: 1, createdAt: -1 });
 
 export const Review = model<IReview>('Review', reviewSchema);
 
