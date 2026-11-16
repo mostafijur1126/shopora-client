@@ -131,6 +131,16 @@ export const getAdminSession = async (): Promise<AdminSession> => {
   return res.user;
 };
 
+export const updateAdminCredentialsApi = async (
+  credentials: { email?: string; password?: string },
+): Promise<AdminSession> => {
+  const res = await request<{ user: AdminSession }>("/auth/admin-credentials", {
+    method: "PATCH",
+    body: JSON.stringify(credentials),
+  });
+  return res.user;
+};
+
 export type StaffStatus = "active" | "inactive";
 
 export interface StaffRecord {
