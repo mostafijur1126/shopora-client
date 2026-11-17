@@ -25,6 +25,7 @@ import {
   AdminSection,
   canAccessAdminSection,
 } from "../utils/adminPermissions";
+import { scrollToTop } from "../utils/scroll";
 
 import {
   LayoutGrid,
@@ -377,7 +378,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
 
   // Every tab change starts at the top of the page
   useEffect(() => {
-    window.scrollTo({ top: 0 });
+    scrollToTop();
   }, [activeTab]);
 
   useEffect(() => {

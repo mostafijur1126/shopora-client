@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ActiveScreen, Product, CategoryItem } from "../types";
 import { getWhatsAppOrderLink } from "../utils/whatsapp";
+import { scrollToTop } from "../utils/scroll";
 import shoporaLogo from "../assets/images/shopora-logo.png";
 import {
   ShoppingCart,
@@ -220,6 +221,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   const handleCategoryClick = (cat: string) => {
     onSelectCategory?.(cat);
     if (activeScreen !== "categories") onNavigate("categories");
+    else scrollToTop();
     closeMenus();
   };
 

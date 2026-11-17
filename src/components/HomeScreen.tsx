@@ -1,8 +1,9 @@
 import React, { useState, useRef } from "react";
 import { Product, ActiveScreen, CategoryItem } from "../types";
 import { promoBanners } from "../data/banners";
-import { ProductCard } from "./ProductCard";
+import { CategoryProductSection } from "./CategoryProductSection";
 import { HeroCarousel } from "./HeroCarousel";
+import { scrollElementIntoView } from "../utils/scroll";
 import {
   ArrowRight,
   Truck,
@@ -15,8 +16,8 @@ import {
   Apple,
   Tv,
   Flame,
+  ShoppingBag,
 } from "lucide-react";
-import { div } from "motion/react-client";
 
 interface HomeScreenProps {
   products?: Product[];
@@ -121,11 +122,6 @@ const CATEGORY_ROWS: CategoryRowConfig[] = [
   },
 ];
 
-// Load 6 per row: that fills 2 columns (mobile) and 3 columns (tablet) evenly.
-// On large screens (5 columns) the 6th card is hidden so the row stays full.
-const PRODUCTS_PER_ROW = 6;
-const DESKTOP_VISIBLE = 5;
-
 const hideScrollbar = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 const norm = (s?: string | null) => (s || "").trim().toLowerCase();
@@ -200,12 +196,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const scrollToPromo = (index: number) => {
     const node = promoRef.current?.children[index] as HTMLElement | undefined;
-    node?.scrollIntoView({
-      behavior: "smooth",
+    scrollElementIntoView(node, {
       inline: "center",
       block: "nearest",
     });
   };
+
+  const categorySections = categories
+    .map((category) => {
+      const keys = [category.slug, category.name, category.nameEn]
+        .map(norm)
+        .filter(Boolean);
+      const config = CATEGORY_ROWS.find((row) =>
+        keys.includes(norm(row.categorySlug)),
+      );
+      const rowProducts = products.filter(
+        (product) =>
+          keys.includes(norm(product.category)) ||
+          keys.includes(norm(product.categoryBn)) ||
+          Boolean(config?.filterFn(product)),
+      );
+
+      return {
+        category,
+        config,
+        products: rowProducts,
+      };
+    })
+    .filter((section) => section.products.length > 0);
 
   return (
     <div>
@@ -289,67 +307,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           id="category-showcase-container"
           className="space-y-10 md:space-y-16"
         >
-          {CATEGORY_ROWS.map((row) => {
-            const rowProducts = products
-              .filter(row.filterFn)
-              .slice(0, PRODUCTS_PER_ROW);
-            const IconComponent = row.icon;
-
-            if (rowProducts.length === 0) {
-              return null;
-            }
+          {categorySections.map(({ category, config, products: rowProducts }) => {
+            const categorySlug = category.slug || category.id;
+            const sectionId = config?.id || `category-${category.id}`;
+            const categoryName = config?.titleBn || category.name;
+            const titleEn = config?.titleEn || category.nameEn || category.name;
+            const IconComponent = config?.icon || ShoppingBag;
 
             return (
-              <section
-                key={row.id}
-                id={`showcase-${row.id}`}
-                className="scroll-mt-6"
-              >
-                {/* Section header */}
-                <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6 border-b border-[#bec9c2]/60 pb-3">
-                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#e7f6f0] text-[#00503a] flex items-center justify-center shrink-0 shadow-xs border border-emerald-100">
-                      <IconComponent className="w-5 h-5 text-[#006a4e]" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base sm:text-2xl font-bold text-[#191c1d] font-bengali tracking-tight truncate">
-                          {row.titleBn}
-                        </h2>
-                        <span className="hidden sm:inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#00503a]/10 text-[#00503a] font-bengali shrink-0">
-                          {row.badgeText}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 font-montserrat hidden sm:block">
-                        {row.titleEn}
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    id={`view-all-${row.id}-btn`}
-                    onClick={() => handleViewCategory(row.categorySlug)}
-                    className="shrink-0 text-[#00503a] hover:text-[#003828] font-bold text-xs sm:text-sm flex items-center gap-1 font-bengali cursor-pointer transition-colors group px-2.5 sm:px-3 h-9 rounded-lg hover:bg-[#e7f6f0]"
-                  >
-                    <span>View All</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#006a4e]" />
-                  </button>
-                </div>
-
-                {/* 2 columns on phones, 3 on tablets, 5 on desktop */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-5">
-                  {rowProducts.map((product, index) => (
-                    <ProductCard
-                      key={`${row.id}-${product.id}`}
-                      product={product}
-                      onAddToCart={onAddToCart}
-                      onSelectProduct={onSelectProduct}
-                      onDirectOrder={onDirectOrder}
-                      className={index >= DESKTOP_VISIBLE ? "lg:hidden" : ""}
-                    />
-                  ))}
-                </div>
-              </section>
+              <CategoryProductSection
+                key={category.id}
+                categoryId={category.id}
+                categoryName={categoryName}
+                categorySlug={categorySlug}
+                titleEn={titleEn}
+                badgeText={config?.badgeText || category.description || category.name}
+                sectionId={sectionId}
+                viewAllUrl={`?page=categories&category=${encodeURIComponent(categorySlug)}`}
+                products={rowProducts}
+                icon={IconComponent}
+                onViewAll={() => handleViewCategory(categorySlug)}
+                onAddToCart={onAddToCart}
+                onSelectProduct={onSelectProduct}
+                onDirectOrder={onDirectOrder}
+              />
             );
           })}
         </div>

@@ -70,11 +70,17 @@ import { HomeScreen } from "./components/HomeScreen";
 import { CategoryScreen } from "./components/CategoryScreen";
 import { CustomerReviewSlider } from "./components/CustomerReviewSlider";
 import { Footer } from "./components/Footer";
-import { CartDrawer } from "./components/CartDrawer";
+import { BackToTopButton } from "./components/BackToTopButton";
 import { FloatingCartButton } from "./components/FloatingCartButton";
 import { FloatingWhatsAppButton } from "./components/FloatingWhatsAppButton";
-import { CheckCircle, Loader2, AlertTriangle } from "lucide-react";
+import {
+  CartSkeleton,
+  CheckoutSkeleton,
+  PageLoadingSkeleton,
+} from "./components/Skeletons";
+import { CheckCircle, AlertTriangle } from "lucide-react";
 import { CartItemOptions, getCartLineKey } from "./utils/cart";
+import { scrollToTop } from "./utils/scroll";
 import {
   createGuestData,
   GUEST_DATA_KEY,
@@ -85,6 +91,9 @@ import {
 // Lazy loaded non-critical screens & heavy modals for small initial bundle size
 const AdminScreen = lazy(() =>
   import("./components/AdminScreen").then((m) => ({ default: m.AdminScreen })),
+);
+const CartDrawer = lazy(() =>
+  import("./components/CartDrawer").then((m) => ({ default: m.CartDrawer })),
 );
 const DirectOrderModal = lazy(() =>
   import("./components/DirectOrderModal").then((m) => ({
@@ -101,25 +110,6 @@ const InfoModal = lazy(() =>
 );
 
 const ModalSuspenseFallback = () => null;
-
-const ScreenSuspenseFallback = () => (
-  <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center">
-    <Loader2 className="w-8 h-8 text-[#00503a] animate-spin mb-3" />
-    <p className="text-sm font-semibold text-gray-600 font-bengali">
-      লোড হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...
-    </p>
-  </div>
-);
-
-// Shown once, while the very first batch of data comes from the API
-const InitialLoadScreen = () => (
-  <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8f9fa]">
-    <Loader2 className="w-10 h-10 text-[#00503a] animate-spin mb-4" />
-    <p className="text-sm font-semibold text-gray-600 font-bengali">
-      Shopora লোড হচ্ছে...
-    </p>
-  </div>
-);
 
 // Shown if the very first API call fails — most likely the backend isn't running.
 const InitialLoadError = ({
@@ -168,6 +158,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [reviews, setReviews] = useState<ReviewScreenshot[]>([]);
+  const [isReviewsLoading, setIsReviewsLoading] = useState(true);
 
   // ---- Admin-only data (loaded when the admin screen opens, or on manual refresh) ----
   const [orders, setOrders] = useState<OrderItem[]>([]);
@@ -208,6 +199,12 @@ export default function App() {
     ) {
       return "admin";
     }
+    if (urlParams.get("page") === "categories" || urlParams.has("category")) {
+      return "categories";
+    }
+    if (urlParams.has("product") || window.location.hash.startsWith("#product-")) {
+      return "product-detail";
+    }
     const savedScreen = localStorage.getItem("shopora_active_screen");
     return (savedScreen as ActiveScreen) || "home";
   });
@@ -235,7 +232,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<
     string | null
-  >(null);
+  >(() => new URLSearchParams(window.location.search).get("category"));
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeInfoModal, setActiveInfoModal] = useState<
     "about" | "contact" | "privacy" | "terms" | "faq" | null
@@ -324,16 +321,25 @@ export default function App() {
     const loadInitialData = async () => {
       setIsInitialLoading(true);
       setInitialLoadError(null);
+      setIsReviewsLoading(true);
+      fetchReviews()
+        .then((reviewsData) => {
+          if (!cancelled) setReviews(reviewsData);
+        })
+        .catch((error) => {
+          if (!cancelled) console.error("Could not load customer reviews", error);
+        })
+        .finally(() => {
+          if (!cancelled) setIsReviewsLoading(false);
+        });
       try {
-        const [productsData, categoriesData, reviewsData] = await Promise.all([
+        const [productsData, categoriesData] = await Promise.all([
           fetchProducts(),
           fetchCategories(),
-          fetchReviews(),
         ]);
         if (cancelled) return;
         setProducts(productsData);
         setCategories(categoriesData);
-        setReviews(reviewsData);
       } catch (err: any) {
         if (cancelled) return;
         setInitialLoadError(
@@ -451,7 +457,7 @@ export default function App() {
 
   // Deep-linking: ?page=admin, ?admin, #admin, /admin and ?product=ID
   useEffect(() => {
-    const checkUrlRoute = () => {
+    const checkUrlRoute = (isPopState = false) => {
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const hash = window.location.hash;
@@ -472,6 +478,13 @@ export default function App() {
           return;
         }
 
+        const categorySlug = urlParams.get("category");
+        if (pageParam === "categories" || categorySlug) {
+          setSelectedCategoryFilter(categorySlug);
+          setActiveScreen("categories");
+          return;
+        }
+
         const productId =
           urlParams.get("product") || hash.replace("#product-", "");
         if (productId && productId !== "admin") {
@@ -483,6 +496,12 @@ export default function App() {
             setSelectedProduct(found);
             setActiveScreen("product-detail");
           }
+          return;
+        }
+
+        if (isPopState && activeScreen === "categories") {
+          setSelectedCategoryFilter(null);
+          setActiveScreen("home");
         }
       } catch (e) {
         console.error("Failed to parse URL route params", e);
@@ -490,13 +509,15 @@ export default function App() {
     };
 
     checkUrlRoute();
-    window.addEventListener("popstate", checkUrlRoute);
-    window.addEventListener("hashchange", checkUrlRoute);
+    const handlePopState = () => checkUrlRoute(true);
+    const handleHashChange = () => checkUrlRoute();
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handleHashChange);
     return () => {
-      window.removeEventListener("popstate", checkUrlRoute);
-      window.removeEventListener("hashchange", checkUrlRoute);
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("hashchange", handleHashChange);
     };
-  }, [products]);
+  }, [activeScreen, products]);
 
   // ---------------- Storefront handlers ----------------
 
@@ -506,7 +527,7 @@ export default function App() {
       [product.id, ...prev.filter((id) => id !== product.id)].slice(0, 10),
     );
     setActiveScreen("product-detail");
-    window.scrollTo(0, 0);
+    scrollToTop();
   };
 
   const handleToggleWishlist = (productId: string) => {
@@ -1102,6 +1123,23 @@ export default function App() {
     try {
       if (screen === "admin") {
         window.history.pushState(null, "", "?page=admin");
+      } else if (screen === "categories") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("page") !== "categories") {
+          params.delete("product");
+          params.delete("admin");
+          params.set("page", "categories");
+          if (selectedCategoryFilter) {
+            params.set("category", selectedCategoryFilter);
+          } else {
+            params.delete("category");
+          }
+          window.history.pushState(
+            null,
+            "",
+            `${window.location.pathname}?${params.toString()}`,
+          );
+        }
       } else if (
         window.location.search.includes("product=") ||
         window.location.search.includes("admin") ||
@@ -1115,12 +1153,43 @@ export default function App() {
     }
 
     setActiveScreen(screen);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   const handleSelectCategory = (cat: string | null) => {
     setSelectedCategoryFilter(cat);
     setActiveScreen("categories");
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.delete("product");
+      params.delete("admin");
+      params.set("page", "categories");
+      if (cat) params.set("category", cat);
+      else params.delete("category");
+      window.history.pushState(
+        null,
+        "",
+        `${window.location.pathname}?${params.toString()}`,
+      );
+    } catch (error) {
+      console.error("Could not update category URL", error);
+    }
+  };
+
+  const handleResetCategoryFilter = () => {
+    setSelectedCategoryFilter(null);
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.delete("category");
+      params.set("page", "categories");
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}?${params.toString()}`,
+      );
+    } catch (error) {
+      console.error("Could not reset category URL", error);
+    }
   };
 
   const totalCartItemsCount = cart.reduce(
@@ -1129,7 +1198,7 @@ export default function App() {
   );
 
   // Block rendering until we know the backend is reachable
-  if (isInitialLoading) return <InitialLoadScreen />;
+  if (isInitialLoading) return <PageLoadingSkeleton screen={activeScreen} />;
   if (initialLoadError) {
     return (
       <InitialLoadError
@@ -1189,7 +1258,7 @@ export default function App() {
             onDirectOrder={handleOpenDirectOrder}
             searchQuery={searchQuery}
             selectedCategoryFilter={selectedCategoryFilter}
-            onResetCategoryFilter={() => setSelectedCategoryFilter(null)}
+            onResetCategoryFilter={handleResetCategoryFilter}
           />
         )}
 
@@ -1213,7 +1282,7 @@ export default function App() {
         )}
 
         {activeScreen === "admin" && (
-          <Suspense fallback={<ScreenSuspenseFallback />}>
+          <Suspense fallback={<PageLoadingSkeleton screen="admin" />}>
             <AdminScreen
               products={products}
               categories={categories}
@@ -1257,7 +1326,10 @@ export default function App() {
       {/* Review slider & footer (customer screens only) */}
       {activeScreen !== "admin" && (
         <>
-          <CustomerReviewSlider reviews={reviews} />
+          <CustomerReviewSlider
+            reviews={reviews}
+            isLoading={isReviewsLoading}
+          />
           <Footer
             onOpenPolicy={(type) =>
               setActiveInfoModal(type as "privacy" | "terms" | "faq")
@@ -1266,18 +1338,22 @@ export default function App() {
         </>
       )}
 
-      <CartDrawer
-        isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        cartItems={cart}
-        onUpdateQuantity={handleUpdateCartQuantity}
-        onRemoveItem={handleRemoveCartItem}
-        onClearCart={handleClearCart}
-        onDirectCheckout={handleOpenCartDirectOrder}
-      />
+      {isCartOpen && (
+        <Suspense fallback={<CartSkeleton />}>
+          <CartDrawer
+            isOpen={isCartOpen}
+            onClose={() => setIsCartOpen(false)}
+            cartItems={cart}
+            onUpdateQuantity={handleUpdateCartQuantity}
+            onRemoveItem={handleRemoveCartItem}
+            onClearCart={handleClearCart}
+            onDirectCheckout={handleOpenCartDirectOrder}
+          />
+        </Suspense>
+      )}
 
       {directOrderData.isOpen && (
-        <Suspense fallback={<ModalSuspenseFallback />}>
+        <Suspense fallback={<CheckoutSkeleton />}>
           <DirectOrderModal
             isOpen={directOrderData.isOpen}
             onClose={() => setDirectOrderData({ isOpen: false })}
@@ -1324,6 +1400,7 @@ export default function App() {
           <span>{toastMessage}</span>
         </div>
       )}
+      <BackToTopButton />
     </div>
   );
 }

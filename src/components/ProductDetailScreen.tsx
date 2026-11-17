@@ -40,6 +40,8 @@ import {
 } from "../services/api";
 import { compressImage } from "../utils/Image";
 import { uploadImageApi } from "../utils/uploadImage";
+import { getScrollBehavior } from "../utils/scroll";
+import { Skeleton } from "./Skeletons";
 
 interface ProductDetailScreenProps {
   product: Product;
@@ -319,7 +321,11 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   const goToImage = (idx: number) => {
     setActiveImageIdx(idx);
     const el = galleryRef.current;
-    if (el) el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
+    if (el)
+      el.scrollTo({
+        left: idx * el.clientWidth,
+        behavior: getScrollBehavior(),
+      });
   };
 
   /* ---------- actions ---------- */
@@ -1045,9 +1051,25 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           )}
 
           {reviewsLoading ? (
-            <div className="py-6 flex items-center justify-center gap-2 text-sm text-gray-500">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading reviews...
+            <div
+              aria-busy="true"
+              aria-label="Loading reviews"
+              className="space-y-4 py-4"
+            >
+              <span className="sr-only">Loading reviews…</span>
+              {Array.from({ length: 2 }, (_, index) => (
+                <div
+                  key={index}
+                  className="flex gap-3 border-b border-gray-100 pb-4"
+                >
+                  <Skeleton className="h-16 w-16 shrink-0 rounded-xl" />
+                  <div className="flex-1 space-y-3">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : productReviews.length === 0 ? (
             <p className="py-5 text-sm text-gray-500">

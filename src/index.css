@@ -57,6 +57,45 @@ body {
   color: #191c1d;
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 7rem;
+}
+
+section[id] {
+  scroll-margin-top: 7rem;
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.category-product-slider {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 0.75rem) / 2);
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .category-product-slider {
+    grid-auto-columns: calc((100% - 2.5rem) / 3);
+    gap: 1.25rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .category-product-slider {
+    grid-auto-columns: calc((100% - 5rem) / 5);
+  }
+}
+
 .font-bengali {
   font-family: "Hind Siliguri", "Inter", sans-serif;
 }
@@ -124,6 +163,15 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html,
+  .scroll-smooth {
+    scroll-behavior: auto;
+  }
+
+  .skeleton-pulse {
+    animation: none;
+  }
+
   .whatsapp-wave {
     animation: none;
   }

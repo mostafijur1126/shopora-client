@@ -10,12 +10,18 @@ import {
   ShieldCheck,
   Sparkles
 } from 'lucide-react';
+import { getScrollBehavior } from "../utils/scroll";
+import { Skeleton } from "./Skeletons";
 
 interface CustomerReviewSliderProps {
   reviews?: ReviewScreenshot[];
+  isLoading?: boolean;
 }
 
-export const CustomerReviewSlider: React.FC<CustomerReviewSliderProps> = ({ reviews = [] }) => {
+export const CustomerReviewSlider: React.FC<CustomerReviewSliderProps> = ({
+  reviews = [],
+  isLoading = false,
+}) => {
   const [selectedReview, setSelectedReview] = useState<ReviewScreenshot | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoPlay, setIsAutoPlay] = useState(true);
@@ -32,15 +38,39 @@ export const CustomerReviewSlider: React.FC<CustomerReviewSliderProps> = ({ revi
     return () => clearInterval(interval);
   }, [isAutoPlay, reviewList.length]);
 
-  // If no reviews, don't render or show empty state
-  if (reviewList.length === 0) {
+  if (reviewList.length === 0 && !isLoading) {
     return null;
+  }
+
+  if (isLoading) {
+    return (
+      <section
+        aria-busy="true"
+        aria-label="Loading customer reviews"
+        className="w-full lg:w-[90%] mx-auto px-4 md:px-8 py-8 md:py-12"
+      >
+        <span className="sr-only">Loading customer reviews…</span>
+        <Skeleton className="mb-5 h-7 w-72 max-w-full" />
+        <Skeleton className="mb-6 h-4 w-2/3 max-w-xl" />
+        <div className="flex gap-4 overflow-hidden">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton
+              key={index}
+              className="h-52 w-[220px] sm:w-[240px] shrink-0 rounded-xl"
+            />
+          ))}
+        </div>
+      </section>
+    );
   }
 
   // Handle smooth scroll next / prev
   const handlePrev = () => {
     if (sliderRef.current) {
-      sliderRef.current.scrollBy({ left: -260, behavior: 'smooth' });
+      sliderRef.current.scrollBy({
+        left: -260,
+        behavior: getScrollBehavior(),
+      });
     }
     setCurrentIndex((prev) => (prev === 0 ? Math.max(0, reviewList.length - 1) : prev - 1));
   };
@@ -50,9 +80,12 @@ export const CustomerReviewSlider: React.FC<CustomerReviewSliderProps> = ({ revi
       // Check if reached end
       const { scrollLeft, scrollWidth, clientWidth } = sliderRef.current;
       if (scrollLeft + clientWidth >= scrollWidth - 10) {
-        sliderRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        sliderRef.current.scrollTo({ left: 0, behavior: getScrollBehavior() });
       } else {
-        sliderRef.current.scrollBy({ left: 260, behavior: 'smooth' });
+        sliderRef.current.scrollBy({
+          left: 260,
+          behavior: getScrollBehavior(),
+        });
       }
     }
     setCurrentIndex((prev) => (prev >= reviewList.length - 1 ? 0 : prev + 1));

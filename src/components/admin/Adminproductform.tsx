@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { compressImage } from "@/src/utils/Image";
 import { uploadImageApi } from "@/src/utils/uploadImage";
+import { scrollElementIntoView } from "../../utils/scroll";
 
 /* ------------------------------------------------------------------ */
 /* constants                                                           */
@@ -670,7 +671,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     const firstKey = ERROR_ORDER.find((k) => next[k]);
     if (firstKey) {
       const el = document.getElementById(`pf-${firstKey}`);
-      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      scrollElementIntoView(el, { block: "center" });
       el?.focus({ preventScroll: true });
       return false;
     }
