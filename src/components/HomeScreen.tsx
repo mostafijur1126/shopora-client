@@ -226,11 +226,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     .filter((section) => section.products.length > 0);
 
   return (
-    <div>
-      <HeroCarousel onViewProducts={handleViewAllCollections} />
-      <div className="w-full lg:w-[90%] mx-auto px-3 sm:px-4 md:px-8 py-4 md:py-8 space-y-7 md:space-y-14">
-        {/* Hero banner */}
-
+    <div className="w-full overflow-hidden">
+      {/* Full Width Hero Banner */}
+      <section className="w-full">
+        <div className="w-full">
+          <HeroCarousel onViewProducts={handleViewAllCollections} />
+        </div>
+      </section>
+      <main className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 md:px-8 lg:px-10 py-5 md:py-8 space-y-8 md:space-y-14">
         {/* Promo banners: swipe slider on phones, one row of 3 from tablet up */}
         {promoBanners.length > 0 && (
           <section
@@ -307,32 +310,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           id="category-showcase-container"
           className="space-y-10 md:space-y-16"
         >
-          {categorySections.map(({ category, config, products: rowProducts }) => {
-            const categorySlug = category.slug || category.id;
-            const sectionId = config?.id || `category-${category.id}`;
-            const categoryName = config?.titleBn || category.name;
-            const titleEn = config?.titleEn || category.nameEn || category.name;
-            const IconComponent = config?.icon || ShoppingBag;
+          {categorySections.map(
+            ({ category, config, products: rowProducts }) => {
+              const categorySlug = category.slug || category.id;
+              const sectionId = config?.id || `category-${category.id}`;
+              const categoryName = config?.titleBn || category.name;
+              const titleEn =
+                config?.titleEn || category.nameEn || category.name;
+              const IconComponent = config?.icon || ShoppingBag;
 
-            return (
-              <CategoryProductSection
-                key={category.id}
-                categoryId={category.id}
-                categoryName={categoryName}
-                categorySlug={categorySlug}
-                titleEn={titleEn}
-                badgeText={config?.badgeText || category.description || category.name}
-                sectionId={sectionId}
-                viewAllUrl={`?page=categories&category=${encodeURIComponent(categorySlug)}`}
-                products={rowProducts}
-                icon={IconComponent}
-                onViewAll={() => handleViewCategory(categorySlug)}
-                onAddToCart={onAddToCart}
-                onSelectProduct={onSelectProduct}
-                onDirectOrder={onDirectOrder}
-              />
-            );
-          })}
+              return (
+                <CategoryProductSection
+                  key={category.id}
+                  categoryId={category.id}
+                  categoryName={categoryName}
+                  categorySlug={categorySlug}
+                  titleEn={titleEn}
+                  badgeText={
+                    config?.badgeText || category.description || category.name
+                  }
+                  sectionId={sectionId}
+                  viewAllUrl={`?page=categories&category=${encodeURIComponent(categorySlug)}`}
+                  products={rowProducts}
+                  icon={IconComponent}
+                  onViewAll={() => handleViewCategory(categorySlug)}
+                  onAddToCart={onAddToCart}
+                  onSelectProduct={onSelectProduct}
+                  onDirectOrder={onDirectOrder}
+                />
+              );
+            },
+          )}
         </div>
 
         {/* Trust strip */}
@@ -396,7 +404,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
           </div>
         </section>
-      </div>
+      </main>
     </div>
   );
 };
