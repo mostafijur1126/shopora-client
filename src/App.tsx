@@ -202,7 +202,10 @@ export default function App() {
     if (urlParams.get("page") === "categories" || urlParams.has("category")) {
       return "categories";
     }
-    if (urlParams.has("product") || window.location.hash.startsWith("#product-")) {
+    if (
+      urlParams.has("product") ||
+      window.location.hash.startsWith("#product-")
+    ) {
       return "product-detail";
     }
     const savedScreen = localStorage.getItem("shopora_active_screen");
@@ -327,7 +330,8 @@ export default function App() {
           if (!cancelled) setReviews(reviewsData);
         })
         .catch((error) => {
-          if (!cancelled) console.error("Could not load customer reviews", error);
+          if (!cancelled)
+            console.error("Could not load customer reviews", error);
         })
         .finally(() => {
           if (!cancelled) setIsReviewsLoading(false);
@@ -364,14 +368,13 @@ export default function App() {
     setIsAdminRefreshing(true);
     try {
       const session = await getAdminSession();
-      const canAccess = (section: Parameters<typeof canAccessAdminSection>[2]) =>
-        canAccessAdminSection(session.role, session.staffRole, section);
+      const canAccess = (
+        section: Parameters<typeof canAccessAdminSection>[2],
+      ) => canAccessAdminSection(session.role, session.staffRole, section);
       const canManageExpenses = canAccess("expenses");
       const canViewReports = canAccess("reports");
       if (!canManageExpenses) setExpenses([]);
-      setReportExpenses(
-        canViewReports && !canManageExpenses ? [] : null,
-      );
+      setReportExpenses(canViewReports && !canManageExpenses ? [] : null);
       const load = async <T,>(
         enabled: boolean,
         fetchData: () => Promise<T>,
@@ -422,7 +425,10 @@ export default function App() {
         setLastRefreshedAt(new Date());
       }
     } catch (error) {
-      console.error("Could not verify admin role before refreshing data", error);
+      console.error(
+        "Could not verify admin role before refreshing data",
+        error,
+      );
       showToast("❌ Admin session could not be verified");
     } finally {
       setIsAdminRefreshing(false);
@@ -1400,7 +1406,7 @@ export default function App() {
           <span>{toastMessage}</span>
         </div>
       )}
-      <BackToTopButton />
+      {/* <BackToTopButton /> */}
     </div>
   );
 }

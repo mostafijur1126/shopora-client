@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Product } from "../types";
 import { ProductCard } from "./ProductCard";
 import { getScrollBehavior } from "../utils/scroll";
@@ -37,27 +37,61 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
 }) => {
   const sliderRef = useRef<HTMLDivElement>(null);
   const pauseUntilRef = useRef(0);
+  const isResettingRef = useRef(false);
+
   const [isHovered, setIsHovered] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
-  const moveSlider = (direction: -1 | 1) => {
+  // Duplicate products for seamless infinite scrolling
+  const infiniteProducts = [...products, ...products];
+
+  // Move only from right to left
+  const moveSlider = () => {
     const slider = sliderRef.current;
     const firstCard = slider?.firstElementChild as HTMLElement | null;
+
     if (!slider || !firstCard) return;
 
     pauseUntilRef.current = Date.now() + 6000;
+
     const gap = Number.parseFloat(getComputedStyle(slider).columnGap) || 0;
+
+    const step = firstCard.getBoundingClientRect().width + gap;
+
     slider.scrollBy({
-      left: direction * (firstCard.getBoundingClientRect().width + gap),
+      left: step,
       behavior: getScrollBehavior(),
     });
   };
 
+  // Seamless infinite loop
+  const handleSliderScroll = () => {
+    const slider = sliderRef.current;
+
+    if (!slider || products.length < 2 || isResettingRef.current) {
+      return;
+    }
+
+    const loopWidth = slider.scrollWidth / 2;
+
+    if (slider.scrollLeft >= loopWidth) {
+      isResettingRef.current = true;
+
+      slider.scrollLeft -= loopWidth;
+
+      requestAnimationFrame(() => {
+        isResettingRef.current = false;
+      });
+    }
+  };
+
+  // Auto slide: Right to Left only
   useEffect(() => {
     if (products.length < 2) return;
 
     const timer = window.setInterval(() => {
       const slider = sliderRef.current;
+
       if (
         !slider ||
         isHovered ||
@@ -68,24 +102,22 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
         return;
       }
 
-      const maxScroll = slider.scrollWidth - slider.clientWidth;
-      if (maxScroll <= 1) return;
-
       const firstCard = slider.firstElementChild as HTMLElement | null;
+
       if (!firstCard) return;
+
       const gap = Number.parseFloat(getComputedStyle(slider).columnGap) || 0;
+
       const step = firstCard.getBoundingClientRect().width + gap;
-      slider.scrollTo({
-        left:
-          slider.scrollLeft + step >= maxScroll - 1
-            ? 0
-            : slider.scrollLeft + step,
-        behavior: getScrollBehavior(),
+
+      slider.scrollBy({
+        left: step,
+        behavior: "smooth",
       });
     }, 4500);
 
     return () => window.clearInterval(timer);
-  }, [isFocused, isHovered, products.length]);
+  }, [isHovered, isFocused, products.length]);
 
   return (
     <section
@@ -95,11 +127,13 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
       data-category-slug={categorySlug}
       className="scroll-mt-6"
     >
+      {/* Section Header */}
       <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6 border-b border-[#bec9c2]/60 pb-3">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#e7f6f0] text-[#00503a] flex items-center justify-center shrink-0 shadow-xs border border-emerald-100">
             <Icon className="w-5 h-5 text-[#006a4e]" />
           </div>
+
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2
@@ -108,33 +142,29 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
               >
                 {categoryName}
               </h2>
+
               <span className="hidden sm:inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#00503a]/10 text-[#00503a] font-bengali shrink-0">
                 {badgeText}
               </span>
             </div>
+
             <p className="text-xs text-gray-500 font-montserrat hidden sm:block">
               {titleEn}
             </p>
           </div>
         </div>
 
+        {/* Navigation */}
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
-            onClick={() => moveSlider(-1)}
-            aria-label={`Previous ${categoryName} products`}
-            className="hidden lg:flex w-9 h-9 items-center justify-center rounded-lg border border-gray-200 text-[#00503a] hover:bg-[#e7f6f0] transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => moveSlider(1)}
+            onClick={moveSlider}
             aria-label={`Next ${categoryName} products`}
             className="hidden lg:flex w-9 h-9 items-center justify-center rounded-lg border border-gray-200 text-[#00503a] hover:bg-[#e7f6f0] transition-colors cursor-pointer"
           >
             <ArrowRight className="w-4 h-4" />
           </button>
+
           <a
             href={viewAllUrl}
             onClick={(event) => {
@@ -147,6 +177,7 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
               ) {
                 return;
               }
+
               event.preventDefault();
               onViewAll();
             }}
@@ -154,21 +185,26 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
             className="text-[#00503a] hover:text-[#003828] font-bold text-xs sm:text-sm flex items-center gap-1 font-bengali cursor-pointer transition-colors group px-2.5 sm:px-3 h-9 rounded-lg hover:bg-[#e7f6f0]"
           >
             <span>View All</span>
+
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#006a4e]" />
           </a>
         </div>
       </div>
 
+      {/* Infinite Product Slider */}
       <div
         ref={sliderRef}
         role="region"
         aria-label={`${categoryName} products`}
         aria-roledescription="carousel"
+        onScroll={handleSliderScroll}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onFocusCapture={() => setIsFocused(true)}
         onBlurCapture={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          if (
+            !event.currentTarget.contains(event.relatedTarget as Node | null)
+          ) {
             setIsFocused(false);
           }
         }}
@@ -180,8 +216,12 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
         }}
         className="category-product-slider overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {products.map((product) => (
-          <div key={product.id} className="min-w-0 snap-start">
+        {infiniteProducts.map((product, index) => (
+          <div
+            key={`${product.id}-${index}`}
+            className="min-w-0 snap-start"
+            aria-hidden={index >= products.length}
+          >
             <ProductCard
               product={product}
               onAddToCart={onAddToCart}
