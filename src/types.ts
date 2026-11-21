@@ -170,9 +170,26 @@ export interface OrderItem {
   deliveryZone?: "inside_dhaka" | "sub_dhaka" | "outside_dhaka";
   deliveryCharge?: number;
   discount?: number;
-  paymentMethod?: "cod" | "bkash" | "nagad" | "card" | "bank";
+  paymentMethod?: "cod" | "bkash" | "nagad" | "card" | "bank" | "cash";
   paidAmount?: number;
   dueAmount?: number;
+  paymentStatus?: "unpaid" | "partially_paid" | "paid";
+  paymentProof?: {
+    amount: number;
+    transactionId?: string;
+    screenshot?: string;
+  };
+  payments?: Array<{
+    id?: string;
+    _id?: string;
+    amount: number;
+    method: "bkash" | "nagad" | "cash";
+    transactionId?: string;
+    screenshot?: string;
+    status: "pending" | "verified" | "rejected";
+    createdAt?: string;
+    verifiedAt?: string;
+  }>;
   saleType?: SaleType;
   items: string;
   orderedProducts?: OrderedProductSummary[];
@@ -180,7 +197,7 @@ export interface OrderItem {
   total: number;
   note?: string;
   status: OrderStatus;
-  courier?: CourierAssignment;
+  courier?: CourierAssignment | null;
   assignedStaff?: string;
   date: string;
   timestamp?: number;
@@ -250,6 +267,8 @@ export interface StoreContactSettings {
   hotlineNumber: string;
   whatsappNumber: string;
   storeAddress: string;
+  bkashNumber: string;
+  nagadNumber: string;
 }
 
 export interface DailyRevenueTrend {

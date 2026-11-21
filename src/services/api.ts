@@ -413,6 +413,27 @@ export const updateOrderApi = async (
   });
   return normalizeId(res.order);
 };
+export const reviewOrderPaymentApi = async (
+  orderId: string,
+  paymentId: string,
+  data: { status: "verified" | "rejected"; amount?: number },
+): Promise<OrderItem> => {
+  const res = await request<{ order: any }>(
+    `/orders/${orderId}/payments/${paymentId}`,
+    { method: "PATCH", body: JSON.stringify(data) },
+  );
+  return normalizeId(res.order);
+};
+export const recordOrderPaymentApi = async (
+  orderId: string,
+  data: { amount: number; method: "bkash" | "nagad" | "cash" },
+): Promise<OrderItem> => {
+  const res = await request<{ order: any }>(`/orders/${orderId}/payments`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return normalizeId(res.order);
+};
 export const deleteOrderApi = async (id: string): Promise<void> => {
   await request(`/orders/${id}`, { method: "DELETE" });
 };

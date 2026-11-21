@@ -25,6 +25,7 @@ import {
   Clock,
   Truck,
   XCircle,
+  RotateCcw,
   Package,
   FileText,
   Loader2,
@@ -131,6 +132,14 @@ const STATUS_OPTIONS: {
       "border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-200",
   },
   {
+    value: "return_received",
+    label: "Returned",
+    hint: "Order returned",
+    icon: RotateCcw,
+    active:
+      "border-violet-600 bg-violet-50 text-violet-800 ring-2 ring-violet-200",
+  },
+  {
     value: "cancelled",
     label: "Cancelled",
     hint: "Order cancelled",
@@ -143,6 +152,7 @@ const STATUS_BADGE: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 border-amber-200",
   processing: "bg-blue-100 text-blue-800 border-blue-200",
   completed: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  return_received: "bg-violet-100 text-violet-800 border-violet-200",
   cancelled: "bg-red-100 text-red-800 border-red-200",
 };
 
@@ -340,6 +350,7 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
           };
 
   const statusChanged = form.status !== (o.status || "pending");
+  const isNewCourierAssignment = form.hasCourier && !o.courier?.partner;
 
   /* ----- product catalog ----- */
   const q = productSearch.trim().toLowerCase();
@@ -414,7 +425,7 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
 
   // Change ONLY the status (leaves every other saved value untouched)
   const handleQuickStatusUpdate = () => {
-    if (!statusChanged || isSaving) return;
+    if (!statusChanged || isSaving || isNewCourierAssignment) return;
     persist({ ...order, status: form.status } as OrderItem);
   };
 
@@ -472,7 +483,7 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
       selectedColor: i.selectedColor,
     })) as unknown as OrderedProductSummary[];
 
-    let courier: CourierAssignment | undefined;
+    let courier: CourierAssignment | null | undefined;
     if (form.hasCourier) {
       courier = {
         partner: form.courierPartner,
@@ -486,6 +497,8 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
         status: form.courierStatus,
         courierFee: deliveryCharge,
       };
+    } else if (o.courier?.partner) {
+      courier = null;
     }
 
     const updated = {
@@ -583,7 +596,7 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
                 <Package className="w-4 h-4 text-[#00503a]" />
                 <span>Order Status</span>
               </div>
-              {statusChanged && (
+              {statusChanged && !isNewCourierAssignment && (
                 <button
                   type="button"
                   onClick={handleQuickStatusUpdate}
@@ -600,7 +613,7 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
               {STATUS_OPTIONS.map((s) => {
                 const Icon = s.icon;
                 const active = form.status === s.value;
@@ -1037,7 +1050,17 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
                   <input
                     type="checkbox"
                     checked={form.hasCourier}
-                    onChange={(e) => set({ hasCourier: e.target.checked })}
+                    onChange={(e) => {
+                      const hasCourier = e.target.checked;
+                      set({
+                        hasCourier,
+                        ...(hasCourier
+                          ? { status: "courier" }
+                          : form.status === "courier" && o.courier?.partner
+                            ? { status: "processing" }
+                            : {}),
+                      });
+                    }}
                     className="rounded text-[#00503a] focus:ring-[#00503a] w-4 h-4"
                   />
                   <span className="text-xs font-bold text-gray-800">

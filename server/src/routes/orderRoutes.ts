@@ -6,6 +6,8 @@ import {
   updateOrderStatus,
   updateOrder,
   deleteOrder,
+  reviewOrderPayment,
+  recordOrderPayment,
 } from "../controllers/orderController.js";
 import {
   optionalProtect,
@@ -21,6 +23,18 @@ router.post("/", optionalProtect, createOrder);
 // Admin only — viewing and managing all orders
 router.get("/", protect, requirePermission("orders:manage"), getOrders);
 router.get("/:id", protect, requirePermission("orders:manage"), getOrderById);
+router.post(
+  "/:id/payments",
+  protect,
+  requirePermission("orders:manage"),
+  recordOrderPayment,
+);
+router.patch(
+  "/:id/payments/:paymentId",
+  protect,
+  requirePermission("orders:manage"),
+  reviewOrderPayment,
+);
 router.patch(
   "/:id/status",
   protect,

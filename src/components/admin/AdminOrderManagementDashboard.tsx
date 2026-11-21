@@ -59,6 +59,11 @@ const AdminEditOrderModal = lazy(() =>
     default: m.AdminEditOrderModal,
   })),
 );
+const AdminViewOrderModal = lazy(() =>
+  import("./AdminViewOrderModal").then((m) => ({
+    default: m.AdminViewOrderModal,
+  })),
+);
 
 interface AdminOrderManagementDashboardProps {
   orders: OrderItem[];
@@ -69,6 +74,15 @@ interface AdminOrderManagementDashboardProps {
     id: string,
     status: OrderStatus,
   ) => void | Promise<void>;
+  onReviewPayment?: (
+    orderId: string,
+    paymentId: string,
+    data: { status: "verified" | "rejected"; amount?: number },
+  ) => Promise<OrderItem | null>;
+  onRecordPayment?: (
+    orderId: string,
+    data: { amount: number; method: "bkash" | "nagad" | "cash" },
+  ) => Promise<OrderItem | null>;
   onDeleteOrder?: (id: string) => void;
 }
 
@@ -76,7 +90,10 @@ export type CoreStatusTab =
   | "all"
   | "pending"
   | "processing"
+  | "courier"
+  | "due"
   | "delivered"
+  | "returned"
   | "cancelled";
 
 type DatePreset = "all" | "today" | "yesterday" | "7days" | "30days" | "custom";
@@ -85,10 +102,13 @@ type DatePreset = "all" | "today" | "yesterday" | "7days" | "30days" | "custom";
 type OrderLine = OrderedProductSummary & { productId?: string };
 
 const CORE_STATUS_TABS: { id: CoreStatusTab; label: string }[] = [
-  { id: "all", label: "All" },
+  { id: "all", label: "All Orders" },
   { id: "pending", label: "Pending" },
   { id: "processing", label: "Processing" },
+  { id: "courier", label: "Courier Processing" },
+  { id: "due", label: "Due Orders" },
   { id: "delivered", label: "Delivered" },
+  { id: "returned", label: "Returned" },
   { id: "cancelled", label: "Cancelled" },
 ];
 
@@ -96,6 +116,7 @@ const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
   { value: "processing", label: "Processing" },
   { value: "delivered", label: "Delivered" },
+  { value: "return_received", label: "Returned" },
   { value: "cancelled", label: "Cancelled" },
 ];
 
@@ -111,23 +132,48 @@ const COURIER_LIST: CourierPartner[] = [
 /* helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-const mapStatusToCoreTab = (
-  status?: string,
-): "pending" | "processing" | "delivered" | "cancelled" => {
-  const s = (status || "pending").toLowerCase();
-  if (s === "delivered" || s === "completed") return "delivered";
-  if (s === "cancelled" || s === "return_received" || s === "incompleted")
-    return "cancelled";
-  if (
-    s === "packing" ||
-    s === "pickup" ||
-    s === "courier" ||
-    s === "processing" ||
-    s === "on_hold" ||
-    s === "exchange"
-  )
-    return "processing";
-  return "pending";
+const orderStatus = (order: OrderItem) => (order.status || "pending").toLowerCase();
+
+const isDeliveredOrder = (order: OrderItem) =>
+  ["delivered", "completed"].includes(orderStatus(order));
+
+const isReturnedOrder = (order: OrderItem) =>
+  orderStatus(order) === "return_received" ||
+  order.courier?.status?.toLowerCase() === "returned";
+
+const isCancelledOrder = (order: OrderItem) =>
+  ["cancelled", "incompleted"].includes(orderStatus(order));
+
+const matchesOrderFilter = (
+  order: OrderItem,
+  filter: Exclude<CoreStatusTab, "all">,
+) => {
+  const status = orderStatus(order);
+  switch (filter) {
+    case "pending":
+      return status === "pending" && !order.courier?.partner;
+    case "processing":
+      return (
+        ["packing", "processing", "on_hold", "exchange"].includes(status) &&
+        !order.courier?.partner
+      );
+    case "courier":
+      return (
+        !isDeliveredOrder(order) &&
+        !isReturnedOrder(order) &&
+        !isCancelledOrder(order) &&
+        (["courier", "pickup"].includes(status) ||
+          Boolean(order.courier?.partner))
+      );
+    case "due":
+      return getPaymentInfo(order).due > 0;
+    case "delivered":
+      return isDeliveredOrder(order);
+    case "returned":
+      return isReturnedOrder(order);
+    case "cancelled":
+      return isCancelledOrder(order);
+  }
 };
 
 const getStatusBadge = (status?: string) => {
@@ -140,7 +186,12 @@ const getStatusBadge = (status?: string) => {
       };
     case "courier":
       return {
-        label: "In courier",
+        label: "Courier Processing",
+        cls: "bg-blue-50 text-blue-800 border-blue-200",
+      };
+    case "pickup":
+      return {
+        label: "Courier Processing",
         cls: "bg-blue-50 text-blue-800 border-blue-200",
       };
     case "packing":
@@ -149,7 +200,6 @@ const getStatusBadge = (status?: string) => {
         cls: "bg-blue-50 text-blue-800 border-blue-200",
       };
     case "processing":
-    case "pickup":
     case "on_hold":
     case "exchange":
       return {
@@ -171,7 +221,7 @@ const getStatusBadge = (status?: string) => {
     case "return_received":
       return {
         label: "Returned",
-        cls: "bg-rose-50 text-rose-800 border-rose-200",
+        cls: "bg-violet-50 text-violet-800 border-violet-200",
       };
     default:
       return {
@@ -205,8 +255,8 @@ const getPaymentInfo = (order: OrderItem) => {
 
 const PAYMENT_LABEL: Record<string, string> = {
   cod: "Cash on delivery",
-  bkash: "bKash",
-  nagad: "Nagad",
+  bkash: "bKash Personal",
+  nagad: "Nagad Personal",
   card: "Card",
   bank: "Bank",
   cash: "Cash",
@@ -444,6 +494,8 @@ export const AdminOrderManagementDashboard: React.FC<
   onAddOrder,
   onUpdateOrder,
   onUpdateOrderStatus,
+  onReviewPayment,
+  onRecordPayment,
   onDeleteOrder,
 }) => {
   // Filters
@@ -464,6 +516,7 @@ export const AdminOrderManagementDashboard: React.FC<
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<OrderItem | null>(null);
+  const [viewingOrder, setViewingOrder] = useState<OrderItem | null>(null);
   const [invoiceOrders, setInvoiceOrders] = useState<OrderItem[] | null>(null);
   const [labelOrders, setLabelOrders] = useState<OrderItem[] | null>(null);
 
@@ -487,19 +540,23 @@ export const AdminOrderManagementDashboard: React.FC<
   };
 
   const { statusCounts, totalRevenue } = useMemo(() => {
-    const counts = {
+    const counts: Record<CoreStatusTab, number> = {
       all: orders.length,
       pending: 0,
       processing: 0,
+      courier: 0,
+      due: 0,
       delivered: 0,
+      returned: 0,
       cancelled: 0,
     };
     let revenue = 0;
     orders.forEach((order) => {
-      const core = mapStatusToCoreTab(order.status);
-      counts[core]++;
-      // Cancelled / returned orders are not revenue
-      if (core !== "cancelled") revenue += order.total || 0;
+      CORE_STATUS_TABS.forEach(({ id }) => {
+        if (id !== "all" && matchesOrderFilter(order, id)) counts[id]++;
+      });
+      if (!isCancelledOrder(order) && !isReturnedOrder(order))
+        revenue += order.total || 0;
     });
     return { statusCounts: counts, totalRevenue: revenue };
   }, [orders]);
@@ -535,7 +592,7 @@ export const AdminOrderManagementDashboard: React.FC<
     const qDigits = q.replace(/\D/g, "");
 
     return orders.filter((order) => {
-      if (activeTab !== "all" && mapStatusToCoreTab(order.status) !== activeTab)
+      if (activeTab !== "all" && !matchesOrderFilter(order, activeTab))
         return false;
 
       if (q) {
@@ -610,6 +667,28 @@ export const AdminOrderManagementDashboard: React.FC<
 
   const handleStatusChange = (orderId: string, status: OrderStatus) => {
     onUpdateOrderStatus?.(orderId, status);
+    setViewingOrder((current) =>
+      current?.id === orderId ? { ...current, status } : current,
+    );
+  };
+
+  const handleReviewPayment = async (
+    orderId: string,
+    paymentId: string,
+    data: { status: "verified" | "rejected"; amount?: number },
+  ) => {
+    const updated = await onReviewPayment?.(orderId, paymentId, data);
+    if (updated) setViewingOrder(updated);
+    return updated ?? null;
+  };
+
+  const handleRecordPayment = async (
+    orderId: string,
+    data: { amount: number; method: "bkash" | "nagad" | "cash" },
+  ) => {
+    const updated = await onRecordPayment?.(orderId, data);
+    if (updated) setViewingOrder(updated);
+    return updated ?? null;
   };
 
   const handleBulkStatusUpdate = (status: OrderStatus) => {
@@ -744,7 +823,10 @@ export const AdminOrderManagementDashboard: React.FC<
     )}`;
 
   const renderActions = (order: OrderItem) => (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div
+      className="flex flex-wrap items-center gap-1.5"
+      onClick={(event) => event.stopPropagation()}
+    >
       <IconBtn label="Edit order" onClick={() => setEditingOrder(order)}>
         <Edit className="w-4 h-4 text-blue-600" />
       </IconBtn>
@@ -836,6 +918,16 @@ export const AdminOrderManagementDashboard: React.FC<
         <p className="text-[11px]">
           <span className="text-gray-500">Due </span>
           <span className="font-semibold text-rose-600">{money(due)}</span>
+        </p>
+        <p className="text-[11px] text-gray-500 capitalize">
+          Payment status:{" "}
+          {(order.paymentStatus ||
+            (paid >= order.total
+              ? "paid"
+              : paid > 0
+                ? "partially_paid"
+                : "unpaid")
+          ).replace("_", " ")}
         </p>
       </div>
     );
@@ -1009,7 +1101,7 @@ export const AdminOrderManagementDashboard: React.FC<
                     active ? "bg-white/20 text-white" : "bg-white text-gray-600"
                   }`}
                 >
-                  {statusCounts[tab.id] || 0}
+                  {statusCounts[tab.id]}
                 </span>
               </button>
             );
@@ -1048,16 +1140,26 @@ export const AdminOrderManagementDashboard: React.FC<
             return (
               <article
                 key={order.id}
+                onClick={() => setViewingOrder(order)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setViewingOrder(order);
+                  }
+                }}
                 className={`bg-white rounded-2xl border p-4 space-y-4 ${
                   selected
                     ? "border-[#00503a] ring-1 ring-[#00503a]/30"
                     : "border-gray-200/70"
-                }`}
+                } cursor-pointer`}
               >
                 <header className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
                     <input
                       type="checkbox"
+                      onClick={(event) => event.stopPropagation()}
                       checked={selected}
                       onChange={() => handleToggleSelectOne(order.id)}
                       aria-label={`Select order ${getInvoiceCode(order)}`}
@@ -1072,7 +1174,9 @@ export const AdminOrderManagementDashboard: React.FC<
                       </p>
                     </div>
                   </div>
-                  <StatusSelect order={order} onChange={handleStatusChange} />
+                  <div onClick={(event) => event.stopPropagation()}>
+                    <StatusSelect order={order} onChange={handleStatusChange} />
+                  </div>
                 </header>
 
                 <ProductLines order={order} productMap={productMap} />
@@ -1142,11 +1246,15 @@ export const AdminOrderManagementDashboard: React.FC<
                   return (
                     <tr
                       key={order.id}
-                      className={`align-top hover:bg-gray-50/60 transition-colors ${
+                      onClick={() => setViewingOrder(order)}
+                      className={`align-top hover:bg-gray-50/60 transition-colors cursor-pointer ${
                         selected ? "bg-emerald-50/40" : ""
                       }`}
                     >
-                      <td className="py-4 px-4 text-center">
+                      <td
+                        className="py-4 px-4 text-center"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           checked={selected}
@@ -1180,14 +1288,20 @@ export const AdminOrderManagementDashboard: React.FC<
                         )}
                       </td>
 
-                      <td className="py-4 px-3">
+                      <td
+                        className="py-4 px-3"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <StatusSelect
                           order={order}
                           onChange={handleStatusChange}
                         />
                       </td>
 
-                      <td className="py-4 px-3">
+                      <td
+                        className="py-4 px-3"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <CourierCell
                           order={order}
                           onAssign={() => setEditingOrder(order)}
@@ -1198,7 +1312,10 @@ export const AdminOrderManagementDashboard: React.FC<
                         {renderPayment(order, "right")}
                       </td>
 
-                      <td className="py-4 px-4">
+                      <td
+                        className="py-4 px-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <div className="max-w-[140px]">
                           {renderActions(order)}
                         </div>
@@ -1468,6 +1585,27 @@ export const AdminOrderManagementDashboard: React.FC<
               if (onUpdateOrder) onUpdateOrder(updated);
               setEditingOrder(null);
             }}
+          />
+        </Suspense>
+      )}
+
+      {viewingOrder && (
+        <Suspense fallback={null}>
+          <AdminViewOrderModal
+            order={viewingOrder}
+            isOpen
+            onClose={() => setViewingOrder(null)}
+            onEditOrder={(order) => {
+              setViewingOrder(null);
+              setEditingOrder(order);
+            }}
+            onOpenInvoice={(order) => {
+              setViewingOrder(null);
+              setInvoiceOrders([order]);
+            }}
+            onUpdateStatus={handleStatusChange}
+            onReviewPayment={handleReviewPayment}
+            onRecordPayment={handleRecordPayment}
           />
         </Suspense>
       )}

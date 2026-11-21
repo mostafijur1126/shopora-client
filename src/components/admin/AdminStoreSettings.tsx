@@ -35,6 +35,8 @@ export const AdminStoreSettings: React.FC = () => {
     hotlineNumber: "",
     whatsappNumber: "",
     storeAddress: "",
+    bkashNumber: "",
+    nagadNumber: "",
   });
   const [isContactLoading, setIsContactLoading] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -84,7 +86,14 @@ export const AdminStoreSettings: React.FC = () => {
     setIsContactLoading(true);
     setContactError(null);
     try {
-      setContactSettings(await fetchStoreContactSettingsApi());
+      const saved = await fetchStoreContactSettingsApi();
+      const normalized = { ...saved, nagadNumber: saved.nagadNumber || "" };
+      setContactSettings(normalized);
+      setSettings((current) => ({
+        ...current,
+        bkashMerchant: normalized.bkashNumber,
+        nagadMerchant: normalized.nagadNumber,
+      }));
     } catch (error) {
       setContactError(
         error instanceof Error
@@ -117,11 +126,16 @@ export const AdminStoreSettings: React.FC = () => {
           supportPhone: contactSettings.hotlineNumber,
           supportWhatsapp: contactSettings.whatsappNumber,
           storeAddress: contactSettings.storeAddress,
+          bkashMerchant: contactSettings.bkashNumber,
+          nagadMerchant: contactSettings.nagadNumber,
         }),
       );
       const savedContactSettings =
         await updateStoreContactSettingsApi(contactSettings);
-      setContactSettings(savedContactSettings);
+      setContactSettings({
+        ...savedContactSettings,
+        nagadNumber: savedContactSettings.nagadNumber || "",
+      });
       showFeedback("Store settings saved successfully!");
     } catch (error) {
       setContactError(
@@ -325,13 +339,20 @@ export const AdminStoreSettings: React.FC = () => {
                 <input
                   type="text"
                   value={settings.bkashMerchant}
-                  onChange={(e) =>
-                    setSettings({ ...settings, bkashMerchant: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setSettings({ ...settings, bkashMerchant: e.target.value });
+                    setContactSettings({
+                      ...contactSettings,
+                      bkashNumber: e.target.value,
+                    });
+                  }}
                   placeholder="01700-000000"
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl font-mono focus:ring-2 focus:ring-[#00503a] focus:outline-none"
                 />
               </div>
+              <p className="text-[11px] text-gray-500">
+                This number is shown to customers during bKash checkout.
+              </p>
 
               <div>
                 <label className="block font-bold text-gray-700 mb-1 flex items-center gap-1.5">
@@ -341,9 +362,13 @@ export const AdminStoreSettings: React.FC = () => {
                 <input
                   type="text"
                   value={settings.nagadMerchant}
-                  onChange={(e) =>
-                    setSettings({ ...settings, nagadMerchant: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setSettings({ ...settings, nagadMerchant: e.target.value });
+                    setContactSettings({
+                      ...contactSettings,
+                      nagadNumber: e.target.value,
+                    });
+                  }}
                   placeholder="01800-000000"
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl font-mono focus:ring-2 focus:ring-[#00503a] focus:outline-none"
                 />

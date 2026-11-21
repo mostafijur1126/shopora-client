@@ -13,6 +13,17 @@ export interface IOrderedProduct {
   image?: string;
 }
 
+export interface IOrderPayment {
+  _id?: Types.ObjectId;
+  amount: number;
+  method: "bkash" | "nagad" | "cash";
+  transactionId?: string;
+  screenshot?: string;
+  status: "pending" | "verified" | "rejected";
+  createdAt: Date;
+  verifiedAt?: Date;
+}
+
 export interface IOrder extends Document {
   invoiceId?: string;
   customerName: string;
@@ -32,9 +43,11 @@ export interface IOrder extends Document {
   total: number;
   paidAmount?: number;
   dueAmount?: number;
+  paymentStatus?: "unpaid" | "partially_paid" | "paid";
+  payments: IOrderPayment[];
   status: string;
   saleType?: string;
-  courier?: Record<string, unknown>;
+  courier?: Record<string, unknown> | null;
   date: string;
   timestamp?: number;
   note?: string;
@@ -58,6 +71,23 @@ const orderedProductSchema = new Schema<IOrderedProduct>(
   { _id: false },
 );
 
+const orderPaymentSchema = new Schema<IOrderPayment>(
+  {
+    amount: { type: Number, required: true, min: 0 },
+    method: { type: String, required: true, enum: ["bkash", "nagad", "cash"] },
+    transactionId: { type: String, trim: true, maxlength: 100 },
+    screenshot: { type: String, maxlength: 7_000_000 },
+    status: {
+      type: String,
+      required: true,
+      enum: ["pending", "verified", "rejected"],
+    },
+    createdAt: { type: Date, required: true, default: Date.now },
+    verifiedAt: { type: Date },
+  },
+  { _id: true },
+);
+
 const orderSchema = new Schema<IOrder>(
   {
     invoiceId: { type: String, trim: true, index: true },
@@ -78,6 +108,12 @@ const orderSchema = new Schema<IOrder>(
     total: { type: Number, required: true, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },
     dueAmount: { type: Number, default: 0, min: 0 },
+    paymentStatus: {
+      type: String,
+      enum: ["unpaid", "partially_paid", "paid"],
+      default: "unpaid",
+    },
+    payments: { type: [orderPaymentSchema], default: [] },
     status: {
       type: String,
       required: true,

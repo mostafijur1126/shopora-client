@@ -142,6 +142,8 @@ export interface IStoreContactSettings extends Document {
   hotlineNumber: string;
   whatsappNumber: string;
   storeAddress: string;
+  bkashNumber: string;
+  nagadNumber: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -152,6 +154,8 @@ const storeContactSettingsSchema = new Schema<IStoreContactSettings>(
     hotlineNumber: { type: String, required: true, trim: true, maxlength: 30 },
     whatsappNumber: { type: String, required: true, trim: true, maxlength: 30 },
     storeAddress: { type: String, required: true, trim: true, maxlength: 500 },
+    bkashNumber: { type: String, default: "", trim: true, maxlength: 30 },
+    nagadNumber: { type: String, default: "", trim: true, maxlength: 30 },
   },
   { timestamps: true },
 );

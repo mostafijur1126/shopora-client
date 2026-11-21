@@ -195,6 +195,15 @@ interface AdminScreenProps {
   onAddOrder?: (newOrder: OrderItem) => void;
   onUpdateOrder?: (updatedOrder: OrderItem) => void;
   onUpdateOrderStatus?: (orderId: string, status: OrderItem["status"]) => void;
+  onReviewPayment?: (
+    orderId: string,
+    paymentId: string,
+    data: { status: "verified" | "rejected"; amount?: number },
+  ) => Promise<OrderItem | null>;
+  onRecordPayment?: (
+    orderId: string,
+    data: { amount: number; method: "bkash" | "nagad" | "cash" },
+  ) => Promise<OrderItem | null>;
   onDeleteOrder?: (orderId: string) => void;
   onNavigate: (screen: ActiveScreen) => void;
   // Manual refresh (no auto polling): data loads when admin opens + on click
@@ -312,6 +321,8 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
   onAddOrder,
   onUpdateOrder,
   onUpdateOrderStatus = () => {},
+  onReviewPayment,
+  onRecordPayment,
   onDeleteOrder = () => {},
   onNavigate,
   onRefresh,
@@ -908,6 +919,8 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                   onUpdateOrderStatus={onUpdateOrderStatus}
                   onAddOrder={onAddOrder}
                   onUpdateOrder={onUpdateOrder}
+                  onReviewPayment={onReviewPayment}
+                  onRecordPayment={onRecordPayment}
                   onDeleteOrder={onDeleteOrder}
                 />
               )}

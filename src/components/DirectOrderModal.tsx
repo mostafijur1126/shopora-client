@@ -3,6 +3,7 @@ import { Product, OrderItem, OrderedProductSummary, CartItem } from "../types";
 import { BANGLADESH_DISTRICTS, isDhakaDistrict } from "../data/districts";
 import { formatPrice } from "../utils/format";
 import { getWhatsAppOrderLink } from "../utils/whatsapp";
+import { fetchStoreContactSettingsApi } from "../services/api";
 import {
   X,
   ShoppingBag,
@@ -171,7 +172,20 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
   const [address, setAddress] = useState("");
   const [district, setDistrict] = useState("Dhaka");
   const [note, setNote] = useState("");
-  const paymentMethod = "cod";
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cod" | "bkash" | "nagad"
+  >("cod");
+  const [bkashNumber, setBkashNumber] = useState("");
+  const [nagadNumber, setNagadNumber] = useState("");
+  const [isLoadingPaymentSettings, setIsLoadingPaymentSettings] =
+    useState(false);
+  const [paymentSettingsError, setPaymentSettingsError] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [transactionId, setTransactionId] = useState("");
+  const [paymentScreenshot, setPaymentScreenshot] = useState("");
+  const [paymentProofError, setPaymentProofError] = useState("");
+  const [paymentNumberCopied, setPaymentNumberCopied] = useState(false);
+  const [paymentNumberCopyError, setPaymentNumberCopyError] = useState("");
 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState("");
@@ -199,6 +213,16 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
     setSubmitError("");
     setIsSubmitting(false);
     setCopiedOrderId(false);
+    setPaymentMethod("cod");
+    setPaymentAmount("");
+    setTransactionId("");
+    setPaymentScreenshot("");
+    setPaymentProofError("");
+    setPaymentNumberCopied(false);
+    setPaymentNumberCopyError("");
+    setPaymentSettingsError("");
+    setBkashNumber("");
+    setNagadNumber("");
 
     setCustomerName(customerProfile?.name || "");
     setPhone(customerProfile?.phone || "");
@@ -206,7 +230,30 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
     setAddress(customerProfile?.address || "");
     setDistrict(customerProfile?.district || "Dhaka");
     setNote("");
-
+    let cancelled = false;
+    setIsLoadingPaymentSettings(true);
+    fetchStoreContactSettingsApi()
+      .then((settings) => {
+        if (!cancelled) {
+          setBkashNumber(settings.bkashNumber || "");
+          setNagadNumber(settings.nagadNumber || "");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setPaymentSettingsError(
+            error instanceof Error
+              ? error.message
+              : "Could not load payment information.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPaymentSettings(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   // Lock page scroll behind the modal and close on Escape
@@ -262,6 +309,18 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
     : "outside_dhaka";
   const deliveryCharge = DELIVERY_FEE[deliveryZone];
   const total = subtotal + deliveryCharge;
+  const isMfsPayment = paymentMethod !== "cod";
+  const paymentProvider = paymentMethod === "nagad" ? "Nagad" : "bKash";
+  const selectedPaymentNumber =
+    paymentMethod === "nagad" ? nagadNumber : bkashNumber;
+  const paymentPanelClass =
+    paymentMethod === "nagad"
+      ? "border-orange-200 bg-orange-50/60"
+      : "border-pink-200 bg-pink-50/60";
+  const paymentTextClass =
+    paymentMethod === "nagad" ? "text-orange-700" : "text-pink-700";
+  const paymentBorderClass =
+    paymentMethod === "nagad" ? "border-orange-200" : "border-pink-200";
 
   /* ----- validation ----- */
   const validate = (): boolean => {
@@ -276,6 +335,31 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
       next.address = "Please add house/road, area and thana.";
     }
     setErrors(next);
+    if (isMfsPayment && !selectedPaymentNumber) {
+      setPaymentProofError(
+        `The store's ${paymentProvider} number is unavailable. Please choose Cash on Delivery or contact the store.`,
+      );
+      return false;
+    }
+    const hasPaymentProof = Boolean(
+      transactionId.trim() || paymentScreenshot,
+    );
+    if (
+      isMfsPayment &&
+      (!Number.isFinite(Number(paymentAmount)) ||
+        Number(paymentAmount) <= 0 ||
+        Number(paymentAmount) > total)
+    ) {
+      setPaymentProofError(
+        `Enter an amount between 1 and ${formatPrice(total)}.`,
+      );
+      return false;
+    }
+    if (isMfsPayment && !hasPaymentProof) {
+      setPaymentProofError("Enter the TrxID or upload a transaction screenshot.");
+      return false;
+    }
+    setPaymentProofError("");
 
     const firstKey = Object.keys(next)[0];
     if (firstKey) {
@@ -283,6 +367,19 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
       return false;
     }
     return true;
+  };
+
+  const handleCopyPaymentNumber = async () => {
+    setPaymentNumberCopyError("");
+    try {
+      await navigator.clipboard.writeText(selectedPaymentNumber);
+      setPaymentNumberCopied(true);
+      window.setTimeout(() => setPaymentNumberCopied(false), 2000);
+    } catch {
+      setPaymentNumberCopyError(
+        "Could not copy the number. Please select and copy it manually.",
+      );
+    }
   };
 
   /* ----- submit ----- */
@@ -340,6 +437,15 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
       deliveryZone,
       deliveryCharge,
       paymentMethod,
+      ...(isMfsPayment
+        ? {
+            paymentProof: {
+              amount: Number(paymentAmount),
+              transactionId: transactionId.trim() || undefined,
+              screenshot: paymentScreenshot || undefined,
+            },
+          }
+        : {}),
       items: itemsSummary,
       orderedProducts,
       subtotal,
@@ -424,7 +530,13 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
     }
     text += `\n*Subtotal:* ${formatPrice(order.subtotal ?? order.total - (order.deliveryCharge || 0))}\n`;
     text += `*Delivery Fee:* ${formatPrice(order.deliveryCharge ?? 0)}\n`;
-    text += `*Total Amount:* ${formatPrice(order.total)} (Cash on Delivery)\n`;
+    const paymentLabel =
+      order.paymentMethod === "bkash"
+        ? "bKash Personal"
+        : order.paymentMethod === "nagad"
+          ? "Nagad Personal"
+          : "Cash on Delivery";
+    text += `*Total Amount:* ${formatPrice(order.total)} (${paymentLabel})\n`;
     if (order.note) text += `*Note:* ${order.note}\n`;
     text += `\nPlease confirm my order. Thank you!`;
     return getWhatsAppOrderLink(text);
@@ -467,7 +579,9 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                 <p className="text-[11px] sm:text-xs text-emerald-100/90 truncate">
                   {placedOrder
                     ? "We have received your order"
-                    : "Cash on Delivery • Fast home delivery"}
+                    : isMfsPayment
+                      ? `${paymentProvider} Personal • Send Money`
+                      : "Cash on Delivery • Fast home delivery"}
                 </p>
               </div>
             </div>
@@ -548,10 +662,20 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                   <div className="flex justify-between gap-4">
                     <dt className="text-gray-500 shrink-0">Payment</dt>
                     <dd className="font-bold text-emerald-800">
-                      Cash on Delivery
+                      {placedOrder.paymentMethod === "bkash"
+                        ? "bKash Personal"
+                        : placedOrder.paymentMethod === "nagad"
+                          ? "Nagad Personal"
+                          : "Cash on Delivery"}
                     </dd>
                   </div>
                 </dl>
+                {(placedOrder.paymentMethod === "bkash" ||
+                  placedOrder.paymentMethod === "nagad") && (
+                  <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900">
+                    Your payment proof is awaiting verification by our team.
+                  </p>
+                )}
 
                 <div className="pt-3 border-t border-emerald-200/60 space-y-2">
                   {placedOrder.orderedProducts?.map((p, idx) => (
@@ -926,20 +1050,232 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                     <Banknote className="w-4 h-4 text-[#00503a]" />
                     Payment
                   </h3>
-                  <div className="flex items-start gap-3 rounded-2xl border-2 border-[#00503a] bg-[#f4fbf8] p-3.5">
-                    <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full border-2 border-[#00503a] flex items-center justify-center">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#00503a]" />
-                    </span>
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">
-                        Cash on Delivery
-                      </p>
-                      <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
-                        Pay in cash when you receive the parcel. You can check
-                        the product before paying.
-                      </p>
-                    </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        ["cod", "Cash on Delivery", "Pay when your order arrives."],
+                        ["bkash", "bKash Personal", "Pay using Send Money."],
+                        ["nagad", "Nagad Personal", "Pay using Nagad Send Money."],
+                      ] as const
+                    ).map(([method, label, description]) => (
+                      <button
+                        key={method}
+                        type="button"
+                        aria-pressed={paymentMethod === method}
+                        onClick={() => {
+                          if (paymentMethod !== method) {
+                            setTransactionId("");
+                            setPaymentScreenshot("");
+                            setPaymentNumberCopied(false);
+                            setPaymentNumberCopyError("");
+                          }
+                          setPaymentMethod(method);
+                          if (method !== "cod" && !paymentAmount) {
+                            setPaymentAmount(String(total));
+                          }
+                          setPaymentProofError("");
+                        }}
+                        className={`text-left rounded-2xl border-2 p-3.5 transition-colors ${
+                          paymentMethod === method
+                            ? method === "nagad"
+                              ? "border-orange-500 bg-orange-50"
+                              : "border-[#00503a] bg-[#f4fbf8]"
+                            : "border-gray-200 bg-white hover:border-emerald-300"
+                        }`}
+                      >
+                        <span className="flex items-start justify-between gap-3">
+                          <span className="flex items-start gap-3">
+                            <span
+                              className={`mt-0.5 w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center ${
+                                paymentMethod === method
+                                  ? method === "nagad"
+                                    ? "border-orange-600"
+                                    : "border-[#00503a]"
+                                  : "border-gray-300"
+                              }`}
+                            >
+                              {paymentMethod === method && (
+                                <span
+                                  className={`w-2.5 h-2.5 rounded-full ${
+                                    method === "nagad"
+                                      ? "bg-orange-600"
+                                      : "bg-[#00503a]"
+                                  }`}
+                                />
+                              )}
+                            </span>
+                            <span>
+                              <span className="block text-sm font-bold text-gray-900">
+                                {label}
+                              </span>
+                              <span className="block text-xs text-gray-600 mt-0.5">
+                                {description}
+                              </span>
+                            </span>
+                          </span>
+                          {method !== "cod" && (
+                            <span
+                              className={`shrink-0 rounded-lg px-2 py-1 text-[10px] font-black ${
+                                method === "nagad"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-pink-100 text-pink-700"
+                              }`}
+                            >
+                              {method === "nagad" ? "NAGAD" : "bKash"}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
                   </div>
+                  {isLoadingPaymentSettings && (
+                    <p className="mt-2 text-xs text-gray-500">
+                      Loading payment information…
+                    </p>
+                  )}
+                  {paymentSettingsError && (
+                    <p role="alert" className="mt-2 text-xs text-red-700">
+                      {paymentSettingsError}
+                    </p>
+                  )}
+                  {isMfsPayment && (
+                    <div
+                      className={`mt-3 space-y-3 rounded-2xl border p-4 ${paymentPanelClass}`}
+                    >
+                      <div>
+                        <p className={`text-xs font-bold ${paymentTextClass}`}>
+                          Send Money to this personal {paymentProvider} number
+                        </p>
+                        <p
+                          className={`mt-1 font-mono text-lg font-extrabold ${paymentTextClass}`}
+                        >
+                          {selectedPaymentNumber ||
+                            `${paymentProvider} number not configured`}
+                        </p>
+                        {selectedPaymentNumber && (
+                          <button
+                            type="button"
+                            onClick={handleCopyPaymentNumber}
+                            className={`mt-2 inline-flex min-h-10 items-center rounded-lg border bg-white px-3 text-xs font-bold hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${paymentBorderClass} ${paymentTextClass}`}
+                          >
+                            {paymentNumberCopied
+                              ? "Number copied"
+                              : "Copy number for Send Money"}
+                          </button>
+                        )}
+                        {paymentNumberCopyError && (
+                          <p role="alert" className="mt-1 text-xs text-red-700">
+                            {paymentNumberCopyError}
+                          </p>
+                        )}
+                        {!selectedPaymentNumber && !isLoadingPaymentSettings && (
+                          <p role="alert" className="mt-1 text-xs text-red-700">
+                            The store has not configured a {paymentProvider}{" "}
+                            number. Please use Cash on Delivery or contact the
+                            store.
+                          </p>
+                        )}
+                        <p className="mt-1 text-xs text-gray-600">
+                          Open {paymentProvider}, choose{" "}
+                          <strong>Send Money</strong>, and send your payment to
+                          the number above. Submit the transaction ID or a
+                          screenshot of the successful transaction below.
+                        </p>
+                      </div>
+                      <label className="block text-xs font-bold text-gray-700">
+                        Amount sent (৳)
+                        <input
+                          type="number"
+                          min={1}
+                          max={total}
+                          step="0.01"
+                          required
+                          value={paymentAmount}
+                          onChange={(e) => {
+                            setPaymentAmount(e.target.value);
+                            setPaymentProofError("");
+                          }}
+                          className="mt-1.5 w-full h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm outline-none focus:border-[#00503a]"
+                        />
+                      </label>
+                      <label className="block text-xs font-bold text-gray-700">
+                        Transaction ID (TrxID)
+                        <input
+                          type="text"
+                          maxLength={100}
+                          value={transactionId}
+                          onChange={(e) => {
+                            setTransactionId(e.target.value);
+                            setPaymentProofError("");
+                          }}
+                          placeholder={`Enter your ${paymentProvider} TrxID`}
+                          className="mt-1.5 w-full h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm outline-none focus:border-[#00503a]"
+                        />
+                      </label>
+                      <label className="block text-xs font-bold text-gray-700">
+                        Or upload transaction screenshot
+                        <input
+                          key={paymentMethod}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            setPaymentProofError("");
+                            if (!file) {
+                              setPaymentScreenshot("");
+                              return;
+                            }
+                            if (
+                              !["image/jpeg", "image/png", "image/webp"].includes(
+                                file.type,
+                              ) ||
+                              file.size > 5_000_000
+                            ) {
+                              setPaymentProofError(
+                                "Choose a JPG, PNG, or WebP image up to 5 MB.",
+                              );
+                              e.target.value = "";
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              if (typeof reader.result === "string") {
+                                setPaymentScreenshot(reader.result);
+                              }
+                            };
+                            reader.onerror = () => {
+                              setPaymentProofError(
+                                "Could not read the screenshot. Please try another image.",
+                              );
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                          className="mt-1.5 block w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:font-bold file:text-[#00503a]"
+                        />
+                      </label>
+                      {paymentScreenshot && (
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={paymentScreenshot}
+                            alt={`Selected ${paymentProvider} payment proof`}
+                            className={`h-16 w-16 rounded-lg border object-cover ${paymentBorderClass}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPaymentScreenshot("")}
+                            className="text-xs font-bold text-red-600"
+                          >
+                            Remove screenshot
+                          </button>
+                        </div>
+                      )}
+                      {paymentProofError && (
+                        <p role="alert" className="text-xs font-semibold text-red-700">
+                          {paymentProofError}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </section>
 
                 {/* Price summary */}

@@ -32,6 +32,8 @@ import {
   createOrderApi,
   updateOrderStatusApi,
   updateOrderApi,
+  reviewOrderPaymentApi,
+  recordOrderPaymentApi,
   deleteOrderApi,
   fetchSuppliers,
   createSupplierApi,
@@ -720,6 +722,8 @@ export default function App() {
       setOrders((prev) => [savedOrder, ...prev]);
 
       if (session === "none") {
+        const { payments: _payments, paymentProof: _paymentProof, ...storedOrder } =
+          savedOrder;
         setGuestData((previous) => ({
           ...previous,
           profile: {
@@ -729,7 +733,7 @@ export default function App() {
             address: draftOrder.address,
             district: draftOrder.district || "Dhaka",
           },
-          orders: [savedOrder, ...previous.orders].slice(0, 25),
+          orders: [storedOrder, ...previous.orders].slice(0, 25),
         }));
       } else if (session === "customer") {
         setCustomerProfile((previous) =>
@@ -779,6 +783,37 @@ export default function App() {
       showToast(`অর্ডার #${orderId} এর স্ট্যাটাস পরিবর্তন করা হয়েছে`);
     } catch (err) {
       showApiError(err, "স্ট্যাটাস আপডেট করা যায়নি");
+    }
+  };
+
+  const handleReviewOrderPayment = async (
+    orderId: string,
+    paymentId: string,
+    data: { status: "verified" | "rejected"; amount?: number },
+  ): Promise<OrderItem | null> => {
+    try {
+      const updated = await reviewOrderPaymentApi(orderId, paymentId, data);
+      setOrders((prev) => prev.map((order) => (order.id === orderId ? updated : order)));
+      showToast("Payment proof updated successfully.");
+      return updated;
+    } catch (err) {
+      showApiError(err, "Payment proof could not be updated.");
+      return null;
+    }
+  };
+
+  const handleRecordOrderPayment = async (
+    orderId: string,
+    data: { amount: number; method: "bkash" | "nagad" | "cash" },
+  ): Promise<OrderItem | null> => {
+    try {
+      const updated = await recordOrderPaymentApi(orderId, data);
+      setOrders((prev) => prev.map((order) => (order.id === orderId ? updated : order)));
+      showToast("Payment recorded successfully.");
+      return updated;
+    } catch (err) {
+      showApiError(err, "Payment could not be recorded.");
+      return null;
     }
   };
 
@@ -1319,6 +1354,8 @@ export default function App() {
               onAddOrder={handlePlaceOrder}
               onUpdateOrder={handleUpdateOrder}
               onUpdateOrderStatus={handleUpdateOrderStatus}
+              onReviewPayment={handleReviewOrderPayment}
+              onRecordPayment={handleRecordOrderPayment}
               onDeleteOrder={handleDeleteOrder}
               onNavigate={handleNavigate}
               onRefresh={loadAdminData}

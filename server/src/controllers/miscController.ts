@@ -268,6 +268,8 @@ const EMPTY_STORE_CONTACT_SETTINGS = {
   hotlineNumber: '',
   whatsappNumber: '',
   storeAddress: '',
+  bkashNumber: '',
+  nagadNumber: '',
 };
 
 const contactPhoneSchema = z
@@ -282,6 +284,24 @@ const storeContactSettingsSchema = z.object({
   hotlineNumber: contactPhoneSchema,
   whatsappNumber: contactPhoneSchema,
   storeAddress: z.string().trim().min(1).max(500),
+  bkashNumber: z
+    .string()
+    .trim()
+    .max(30)
+    .refine(
+      (value) => !value || contactPhoneSchema.safeParse(value).success,
+      'Enter a valid bKash number',
+    )
+    .optional(),
+  nagadNumber: z
+    .string()
+    .trim()
+    .max(30)
+    .refine(
+      (value) => !value || contactPhoneSchema.safeParse(value).success,
+      'Enter a valid Nagad number',
+    )
+    .optional(),
 });
 
 export const getStoreContactSettings = asyncHandler(
@@ -290,7 +310,7 @@ export const getStoreContactSettings = asyncHandler(
     const storedSettings = await StoreContactSettings.findOne({
       key: STORE_CONTACT_SETTINGS_KEY,
     })
-      .select('hotlineNumber whatsappNumber storeAddress')
+      .select('hotlineNumber whatsappNumber storeAddress bkashNumber nagadNumber')
       .lean();
 
     res.json({
@@ -300,6 +320,8 @@ export const getStoreContactSettings = asyncHandler(
             hotlineNumber: storedSettings.hotlineNumber,
             whatsappNumber: storedSettings.whatsappNumber,
             storeAddress: storedSettings.storeAddress,
+            bkashNumber: storedSettings.bkashNumber || '',
+            nagadNumber: storedSettings.nagadNumber || '',
           }
         : EMPTY_STORE_CONTACT_SETTINGS,
     });
@@ -331,6 +353,8 @@ export const updateStoreContactSettings = asyncHandler(
         hotlineNumber: settings.hotlineNumber,
         whatsappNumber: settings.whatsappNumber,
         storeAddress: settings.storeAddress,
+        bkashNumber: settings.bkashNumber || '',
+        nagadNumber: settings.nagadNumber || '',
       },
     });
   },

@@ -1,6 +1,26 @@
 import { z } from "zod";
 import { ORDER_STATUSES } from "./orderLogic.js";
 
+const paymentScreenshotSchema = z
+  .string()
+  .max(7_000_000)
+  .regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/)
+  .refine((value) => {
+    const encoded = value.slice(value.indexOf(",") + 1);
+    return Math.floor((encoded.length * 3) / 4) <= 5_000_000;
+  }, "Screenshot must be 5 MB or smaller");
+
+const paymentProofSchema = z
+  .object({
+    amount: z.number().positive().max(10_000_000),
+    transactionId: z.string().trim().max(100).optional(),
+    screenshot: paymentScreenshotSchema.optional(),
+  })
+  .refine(
+    (proof) => Boolean(proof.transactionId || proof.screenshot),
+    "A transaction ID or payment screenshot is required",
+  );
+
 // The website sends each ordered product's database id as `id`; older code expected `productId`.
 // Accept both, and always hand the rest of the server a `productId`.
 const orderedProductSchema = z.preprocess(
@@ -35,6 +55,7 @@ export const orderSchema = z.object({
   deliveryCharge: z.number().min(0).optional(),
   discount: z.number().min(0).optional(),
   paymentMethod: z.string().min(1),
+  paymentProof: paymentProofSchema.optional(),
   orderedProducts: z.array(orderedProductSchema).min(1).max(100),
   subtotal: z.number().min(0),
   total: z.number().min(0),
@@ -42,5 +63,5 @@ export const orderSchema = z.object({
   saleType: z.string().max(50).optional(),
   note: z.string().max(1000).optional(),
   status: z.enum(ORDER_STATUSES).optional(),
-  courier: z.record(z.string(), z.unknown()).optional(),
+  courier: z.record(z.string(), z.unknown()).nullable().optional(),
 });

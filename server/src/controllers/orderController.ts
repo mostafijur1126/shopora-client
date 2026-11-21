@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { string, z } from "zod";
+import { z } from "zod";
 import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 import { Customer } from "../models/Customer.js";
@@ -144,9 +144,30 @@ export const createOrder = asyncHandler(
     if (!isStaff && !data.district) {
       throw new AppError("Please select a delivery district", 400);
     }
-    if (!isStaff && data.paymentMethod !== "cod") {
+    if (
+      !isStaff &&
+      data.paymentMethod !== "cod" &&
+      data.paymentMethod !== "bkash" &&
+      data.paymentMethod !== "nagad"
+    ) {
       throw new AppError(
-        "Cash on delivery is the only available payment method",
+        "Please select a supported payment method",
+        400,
+      );
+    }
+    if (
+      !isStaff &&
+      (data.paymentMethod === "bkash" || data.paymentMethod === "nagad") &&
+      !data.paymentProof
+    ) {
+      throw new AppError(
+        `${data.paymentMethod === "nagad" ? "Nagad" : "bKash"} orders require a transaction ID or payment screenshot`,
+        400,
+      );
+    }
+    if (!isStaff && data.paymentMethod === "cod" && data.paymentProof) {
+      throw new AppError(
+        "Payment proof is only accepted for bKash or Nagad orders",
         400,
       );
     }
@@ -292,6 +313,12 @@ export const createOrder = asyncHandler(
       paidAmount: data.paidAmount,
       isStaff,
     });
+    if (
+      data.paymentProof &&
+      round2(data.paymentProof.amount) > totals.total
+    ) {
+      throw new AppError("Payment amount cannot exceed the order total", 400);
+    }
 
     // 3) Reserve stock atomically (a single conditional update per product), so two customers
     //    buying the last item at the same moment cannot both succeed. Undo everything if any step fails.
@@ -347,6 +374,38 @@ export const createOrder = asyncHandler(
         total: totals.total,
         paidAmount: totals.paidAmount,
         dueAmount: totals.dueAmount,
+        paymentStatus:
+          totals.paidAmount >= totals.total
+            ? "paid"
+            : totals.paidAmount > 0
+              ? "partially_paid"
+              : "unpaid",
+        payments: data.paymentProof
+          ? [
+              {
+                amount: round2(data.paymentProof.amount),
+                method: data.paymentMethod === "nagad" ? "nagad" : "bkash",
+                transactionId: data.paymentProof.transactionId || undefined,
+                screenshot: data.paymentProof.screenshot,
+                status: "pending",
+                createdAt: new Date(),
+              },
+            ]
+          : isStaff && totals.paidAmount > 0
+            ? [
+                {
+                  amount: totals.paidAmount,
+                  method:
+                    data.paymentMethod === "bkash" ||
+                    data.paymentMethod === "nagad"
+                      ? data.paymentMethod
+                      : "cash",
+                  status: "verified",
+                  createdAt: new Date(),
+                  verifiedAt: new Date(),
+                },
+              ]
+            : [],
         status: isStaff && data.status ? data.status : "pending",
         saleType: isStaff ? data.saleType : undefined,
         courier: isStaff ? data.courier : undefined,
@@ -386,6 +445,163 @@ export const createOrder = asyncHandler(
   },
 );
 
+const paymentReviewSchema = z.object({
+  status: z.enum(["verified", "rejected"]),
+  amount: z.number().positive().max(10_000_000).optional(),
+});
+
+// PATCH /api/orders/:id/payments/:paymentId — review a submitted payment proof.
+export const reviewOrderPayment = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const parsed = paymentReviewSchema.safeParse(req.body);
+    if (!parsed.success) throw new AppError("Invalid payment review", 400);
+
+    const order = await Order.findById(req.params.id);
+    if (!order) throw new AppError("Order not found", 404);
+    const payment = order.payments.find(
+      (entry) => String(entry._id) === req.params.paymentId,
+    );
+    if (!payment) throw new AppError("Payment record not found", 404);
+    if (payment.status !== "pending") {
+      throw new AppError("This payment proof has already been reviewed", 409);
+    }
+
+    const amount = round2(
+      parsed.data.amount === undefined ? payment.amount : parsed.data.amount,
+    );
+    if (parsed.data.status === "verified") {
+      const currentPaid = order.paidAmount ?? 0;
+      if (currentPaid + amount > order.total) {
+        throw new AppError("Verified payments cannot exceed the order total", 400);
+      }
+
+      const nextPaid = Math.round((currentPaid + amount) * 100) / 100;
+      const updated = await Order.findOneAndUpdate(
+        {
+          _id: order._id,
+          paidAmount: { $in: [currentPaid, null] },
+          payments: {
+            $elemMatch: { _id: payment._id, status: "pending" },
+          },
+        },
+        {
+          $set: {
+            "payments.$.amount": amount,
+            "payments.$.status": "verified",
+            "payments.$.verifiedAt": new Date(),
+            paidAmount: nextPaid,
+            dueAmount: Math.round((order.total - nextPaid) * 100) / 100,
+            paymentStatus:
+              nextPaid >= order.total
+                ? "paid"
+                : "partially_paid",
+          },
+        },
+        { new: true, runValidators: true },
+      );
+      if (!updated) {
+        throw new AppError(
+          "Payment changed while being reviewed. Refresh and try again.",
+          409,
+        );
+      }
+      await recordActivity(req, {
+        actionType: "payment",
+        module: "orders",
+        description: `Verified ${amount} tk payment for ${order.invoiceId || "order"}.`,
+        targetId: String(order._id),
+        targetName: order.invoiceId,
+        newValues: { amount, paymentStatus: updated.paymentStatus },
+      });
+      res.json({ success: true, order: updated });
+      return;
+    }
+
+    const updated = await Order.findOneAndUpdate(
+      {
+        _id: order._id,
+        payments: {
+          $elemMatch: { _id: payment._id, status: "pending" },
+        },
+      },
+      { $set: { "payments.$.status": "rejected" } },
+      { new: true, runValidators: true },
+    );
+    if (!updated) {
+      throw new AppError(
+        "Payment changed while being reviewed. Refresh and try again.",
+        409,
+      );
+    }
+    await recordActivity(req, {
+      actionType: "payment",
+      module: "orders",
+      description: `Rejected payment proof for ${order.invoiceId || "order"}.`,
+      targetId: String(order._id),
+      targetName: order.invoiceId,
+      newValues: { paymentStatus: updated.paymentStatus },
+    });
+    res.json({ success: true, order: updated });
+  },
+);
+
+const receivedPaymentSchema = z.object({
+  amount: z.number().positive().max(10_000_000),
+  method: z.enum(["bkash", "nagad", "cash"]),
+});
+
+// POST /api/orders/:id/payments — record an additional received payment.
+export const recordOrderPayment = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const parsed = receivedPaymentSchema.safeParse(req.body);
+    if (!parsed.success) throw new AppError("Invalid payment amount or method", 400);
+    const order = await Order.findById(req.params.id);
+    if (!order) throw new AppError("Order not found", 404);
+    const amount = round2(parsed.data.amount);
+    const currentPaid = order.paidAmount ?? 0;
+    const nextPaid = round2(currentPaid + amount);
+    if (nextPaid > order.total) {
+      throw new AppError("Payments cannot exceed the order total", 400);
+    }
+
+    const updated = await Order.findOneAndUpdate(
+      { _id: order._id, paidAmount: { $in: [currentPaid, null] } },
+      {
+        $push: {
+          payments: {
+            amount,
+            method: parsed.data.method,
+            status: "verified",
+            createdAt: new Date(),
+            verifiedAt: new Date(),
+          },
+        },
+        $set: {
+          paidAmount: nextPaid,
+          dueAmount: Math.round((order.total - nextPaid) * 100) / 100,
+          paymentStatus: nextPaid >= order.total ? "paid" : "partially_paid",
+        },
+      },
+      { new: true, runValidators: true },
+    );
+    if (!updated) {
+      throw new AppError(
+        "Payment changed while being recorded. Refresh and try again.",
+        409,
+      );
+    }
+    await recordActivity(req, {
+      actionType: "payment",
+      module: "orders",
+      description: `Recorded ${amount} tk payment for ${order.invoiceId || "order"}.`,
+      targetId: String(order._id),
+      targetName: order.invoiceId,
+      newValues: { amount, paymentStatus: updated.paymentStatus },
+    });
+    res.status(201).json({ success: true, order: updated });
+  },
+);
+
 const statusSchema = z.object({
   status: z.enum(ORDER_STATUSES),
 });
@@ -398,6 +614,15 @@ export const updateOrderStatus = asyncHandler(
 
     const previous = await Order.findById(req.params.id);
     if (!previous) throw new AppError("Order not found", 404);
+    if (
+      parsed.data.status === "courier" &&
+      !previous.courier?.partner
+    ) {
+      throw new AppError(
+        "Assign a courier before setting the order to courier processing",
+        400,
+      );
+    }
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       { status: parsed.data.status },
@@ -434,12 +659,22 @@ export const updateOrder = asyncHandler(
     }
     const previous = await Order.findById(req.params.id);
     if (!previous) throw new AppError("Order not found", 404);
-    const order = await Order.findByIdAndUpdate(req.params.id, parsed.data, {
+    const assignedCourier = parsed.data.courier?.partner;
+    const previousCourier = previous.courier?.partner;
+    const courierAssigned =
+      typeof assignedCourier === "string" &&
+      assignedCourier.trim().length > 0 &&
+      assignedCourier !== previousCourier;
+    const updateData = {
+      ...parsed.data,
+      ...(courierAssigned ? { status: "courier" as const } : {}),
+    };
+    const order = await Order.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true,
     });
     if (!order) throw new AppError("Order not found", 404);
-    const hasChanges = Object.keys(parsed.data).some(
+    const hasChanges = Object.keys(updateData).some(
       (key) =>
         JSON.stringify(previous.get(key)) !== JSON.stringify(order.get(key)),
     );

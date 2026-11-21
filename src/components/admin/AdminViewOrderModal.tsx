@@ -19,7 +19,9 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  RotateCcw,
   ExternalLink,
+  CreditCard,
 } from "lucide-react";
 
 interface AdminViewOrderModalProps {
@@ -29,6 +31,15 @@ interface AdminViewOrderModalProps {
   onEditOrder?: (order: OrderItem) => void;
   onOpenInvoice?: (order: OrderItem) => void;
   onUpdateStatus?: (orderId: string, status: OrderItem["status"]) => void;
+  onReviewPayment?: (
+    orderId: string,
+    paymentId: string,
+    data: { status: "verified" | "rejected"; amount?: number },
+  ) => Promise<OrderItem | null>;
+  onRecordPayment?: (
+    orderId: string,
+    data: { amount: number; method: "bkash" | "nagad" | "cash" },
+  ) => Promise<OrderItem | null>;
 }
 
 export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
@@ -38,9 +49,19 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
   onEditOrder,
   onOpenInvoice,
   onUpdateStatus,
+  onReviewPayment,
+  onRecordPayment,
 }) => {
-  console.log(order);
   const [copiedTracking, setCopiedTracking] = React.useState(false);
+  const [paymentAmounts, setPaymentAmounts] = React.useState<
+    Record<string, string>
+  >({});
+  const [newPaymentAmount, setNewPaymentAmount] = React.useState("");
+  const [newPaymentMethod, setNewPaymentMethod] = React.useState<
+    "bkash" | "nagad" | "cash"
+  >("cash");
+  const [paymentBusy, setPaymentBusy] = React.useState(false);
+  const [paymentError, setPaymentError] = React.useState("");
 
   if (!isOpen) return null;
 
@@ -88,11 +109,24 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
           icon: Clock,
           label: "Processing / Confirmed",
         };
+      case "courier":
+      case "pickup":
+        return {
+          bg: "bg-blue-100 text-blue-900 border-blue-300",
+          icon: Clock,
+          label: "Courier Processing",
+        };
       case "cancelled":
         return {
           bg: "bg-red-100 text-red-900 border-red-300",
           icon: XCircle,
           label: "Cancelled",
+        };
+      case "return_received":
+        return {
+          bg: "bg-violet-100 text-violet-900 border-violet-300",
+          icon: RotateCcw,
+          label: "Returned",
         };
       default:
         return {
@@ -105,6 +139,61 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
 
   const statusBadge = getStatusBadge(order.status);
   const StatusIcon = statusBadge.icon;
+  const paidAmount = order.paidAmount ?? 0;
+  const dueAmount = order.dueAmount ?? Math.max(0, order.total - paidAmount);
+  const paymentStatus =
+    order.paymentStatus ??
+    (paidAmount >= order.total
+      ? "paid"
+      : paidAmount > 0
+        ? "partially_paid"
+        : "unpaid");
+
+  const reviewPayment = async (
+    paymentId: string,
+    status: "verified" | "rejected",
+  ) => {
+    if (!onReviewPayment) return;
+    setPaymentBusy(true);
+    setPaymentError("");
+    try {
+      const amountValue = paymentAmounts[paymentId];
+      const updated = await onReviewPayment(order.id, paymentId, {
+        status,
+        ...(status === "verified" && amountValue
+          ? { amount: Number(amountValue) }
+          : {}),
+      });
+      if (!updated) setPaymentError("Payment could not be updated.");
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error ? error.message : "Payment could not be updated.",
+      );
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
+  const recordPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!onRecordPayment) return;
+    setPaymentBusy(true);
+    setPaymentError("");
+    try {
+      const updated = await onRecordPayment(order.id, {
+        amount: Number(newPaymentAmount),
+        method: newPaymentMethod,
+      });
+      if (updated) setNewPaymentAmount("");
+      else setPaymentError("Payment could not be recorded.");
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error ? error.message : "Payment could not be recorded.",
+      );
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs overflow-y-auto animate-in fade-in">
@@ -219,6 +308,17 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                   }`}
                 >
                   Delivered
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateStatus(order.id, "return_received")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    order.status === "return_received"
+                      ? "bg-violet-600 text-white shadow-xs"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Returned
                 </button>
                 <button
                   type="button"
@@ -421,6 +521,185 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
             </div>
           </div>
 
+          {/* Payment Information */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs space-y-3">
+            <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-[#003828] font-bold text-sm">
+              <CreditCard className="w-4 h-4 text-[#00503a]" />
+              <span>Payment Information</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <span className="text-gray-500 block">Order Total</span>
+                <strong>{order.total.toLocaleString()} tk</strong>
+              </div>
+              <div>
+                <span className="text-gray-500 block">Paid</span>
+                <strong className="text-emerald-700">
+                  {paidAmount.toLocaleString()} tk
+                </strong>
+              </div>
+              <div>
+                <span className="text-gray-500 block">Due</span>
+                <strong className="text-amber-700">
+                  {dueAmount.toLocaleString()} tk
+                </strong>
+              </div>
+              <div>
+                <span className="text-gray-500 block">Payment Status</span>
+                <strong className="capitalize">
+                  {paymentStatus.replace("_", " ")}
+                </strong>
+              </div>
+            </div>
+            <p className="text-xs text-gray-700">
+              Method:{" "}
+              <strong>
+                {order.paymentMethod === "bkash"
+                  ? "bKash Personal"
+                  : order.paymentMethod === "nagad"
+                    ? "Nagad Personal"
+                    : order.paymentMethod === "cod"
+                      ? "Cash on Delivery (COD)"
+                      : order.paymentMethod || "Cash on Delivery (COD)"}
+              </strong>
+            </p>
+
+            {order.payments && order.payments.length > 0 && (
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                {order.payments.map((payment, index) => {
+                  const paymentId = payment.id || payment._id || `payment-${index}`;
+                  const paymentMethodLabel =
+                    payment.method === "bkash"
+                      ? "bKash"
+                      : payment.method === "nagad"
+                        ? "Nagad"
+                        : "Cash";
+                  return (
+                    <div
+                      key={paymentId}
+                      className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2"
+                    >
+                      <div className="flex flex-wrap justify-between gap-2 text-xs">
+                        <strong>
+                          {paymentMethodLabel} ·{" "}
+                          {payment.amount.toLocaleString()} tk
+                          {payment.status === "pending" ? " submitted" : ""}
+                        </strong>
+                        <span className="capitalize">{payment.status}</span>
+                      </div>
+                      {payment.transactionId && (
+                        <p className="text-xs">
+                          TrxID: <span className="font-mono">{payment.transactionId}</span>
+                        </p>
+                      )}
+                      {payment.screenshot && (
+                        <a
+                          href={payment.screenshot}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-xs font-bold text-[#00503a] underline"
+                        >
+                          <img
+                            src={payment.screenshot}
+                            alt={`${paymentMethodLabel} payment proof`}
+                            className="h-14 w-14 rounded-lg border border-gray-200 object-cover"
+                          />
+                          View payment screenshot
+                        </a>
+                      )}
+                      {payment.status === "pending" && onReviewPayment && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="text-xs text-gray-600">
+                            Received amount
+                            <input
+                              type="number"
+                              min={0.01}
+                              max={dueAmount}
+                              step="0.01"
+                              value={
+                                paymentAmounts[paymentId] ??
+                                String(payment.amount)
+                              }
+                              onChange={(event) =>
+                                setPaymentAmounts((previous) => ({
+                                  ...previous,
+                                  [paymentId]: event.target.value,
+                                }))
+                              }
+                              className="ml-2 h-9 w-28 rounded-lg border border-gray-300 bg-white px-2"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={paymentBusy}
+                            onClick={() => reviewPayment(paymentId, "verified")}
+                            className="h-9 rounded-lg bg-emerald-700 px-3 text-xs font-bold text-white disabled:opacity-60"
+                          >
+                            Verify payment
+                          </button>
+                          <button
+                            type="button"
+                            disabled={paymentBusy}
+                            onClick={() => reviewPayment(paymentId, "rejected")}
+                            className="h-9 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 disabled:opacity-60"
+                          >
+                            Reject proof
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {onRecordPayment && dueAmount > 0 && (
+              <form
+                onSubmit={recordPayment}
+                className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3"
+              >
+                <label className="text-xs font-semibold text-gray-600">
+                  Record received payment
+                  <input
+                    type="number"
+                    min={0.01}
+                    max={dueAmount}
+                    step="0.01"
+                    required
+                    value={newPaymentAmount}
+                    onChange={(event) => setNewPaymentAmount(event.target.value)}
+                    className="mt-1 block h-10 w-32 rounded-lg border border-gray-300 bg-white px-2"
+                  />
+                </label>
+                <select
+                  value={newPaymentMethod}
+                  onChange={(event) =>
+                    setNewPaymentMethod(
+                      event.target.value as "bkash" | "nagad" | "cash",
+                    )
+                  }
+                  className="h-10 rounded-lg border border-gray-300 bg-white px-2 text-xs"
+                >
+                  <option value="cash">Cash / COD</option>
+                  <option value="bkash">bKash</option>
+                  <option value="nagad">Nagad</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={paymentBusy}
+                  className="h-10 rounded-lg bg-[#00503a] px-3 text-xs font-bold text-white disabled:opacity-60"
+                >
+                  Add payment
+                </button>
+              </form>
+            )}
+            {paymentError && (
+              <p role="alert" className="text-xs font-semibold text-red-700">
+                {paymentError}
+              </p>
+            )}
+          </div>
+
           {/* Ordered Products Table */}
           <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden">
             <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
@@ -467,6 +746,16 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                                 <p className="text-[10px] font-mono text-gray-400">
                                   SKU: {item.sku}
                                 </p>
+                              )}
+                              {item.selectedSize && (
+                                <span className="text-gray-500">
+                                  Size: {item.selectedSize}
+                                </span>
+                              )}
+                              {item.selectedColor && (
+                                <span className="text-gray-500">
+                                  Color: {item.selectedColor}
+                                </span>
                               )}
                             </div>
                           </div>
