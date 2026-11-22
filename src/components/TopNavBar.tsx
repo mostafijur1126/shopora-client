@@ -658,15 +658,6 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                               : "border-transparent hover:bg-[#ecfdf5] hover:border-[#00503a] text-gray-700 hover:text-[#00503a]"
                           }`}
                         >
-                          <span
-                            className={`shrink-0 ${
-                              selected
-                                ? "text-[#00503a]"
-                                : "text-gray-500 group-hover:text-[#00503a]"
-                            }`}
-                          >
-                            {renderCategoryIcon(cat.iconName, "w-4 h-4")}
-                          </span>
                           <span className="text-sm font-medium truncate flex-1">
                             {cat.name}
                           </span>
@@ -819,9 +810,6 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                           : "bg-gray-50 border-gray-100 text-gray-700 hover:bg-[#e7f6f0] hover:text-[#00503a]"
                       }`}
                     >
-                      <span className="text-[#006a4e] shrink-0">
-                        {renderCategoryIcon(cat.iconName, "w-4 h-4")}
-                      </span>
                       <span className="truncate">{cat.name}</span>
                     </button>
                   );

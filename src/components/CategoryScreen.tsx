@@ -238,9 +238,9 @@ export const CategoryScreen: React.FC<CategoryScreenProps> = ({
                     onChange={() => toggleCategory(cat)}
                     className="w-4 h-4 rounded border-gray-300 accent-[#00503a] cursor-pointer shrink-0"
                   />
-                  <span className="text-[#006a4e] shrink-0">
+                  {/* <span className="text-[#006a4e] shrink-0">
                     {renderCategoryIcon(cat.iconName, "w-4 h-4")}
-                  </span>
+                  </span> */}
                   <span className="text-sm truncate">{cat.name}</span>
                 </div>
                 <span
