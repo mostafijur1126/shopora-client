@@ -139,6 +139,8 @@ export const StockNotifyRequest = model<IStockNotifyRequest>('StockNotifyRequest
 
 export interface IStoreContactSettings extends Document {
   key: string;
+  shopName: string;
+  shopEmail: string;
   hotlineNumber: string;
   whatsappNumber: string;
   storeAddress: string;
@@ -151,6 +153,8 @@ export interface IStoreContactSettings extends Document {
 const storeContactSettingsSchema = new Schema<IStoreContactSettings>(
   {
     key: { type: String, required: true, unique: true, immutable: true },
+    shopName: { type: String, default: '', trim: true, maxlength: 150 },
+    shopEmail: { type: String, default: '', trim: true, maxlength: 254 },
     hotlineNumber: { type: String, required: true, trim: true, maxlength: 30 },
     whatsappNumber: { type: String, required: true, trim: true, maxlength: 30 },
     storeAddress: { type: String, required: true, trim: true, maxlength: 500 },

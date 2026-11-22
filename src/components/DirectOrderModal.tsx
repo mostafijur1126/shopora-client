@@ -5,6 +5,7 @@ import { formatPrice } from "../utils/format";
 import { getWhatsAppOrderLink } from "../utils/whatsapp";
 import { fetchStoreContactSettingsApi } from "../services/api";
 import {
+  ArrowLeft,
   X,
   ShoppingBag,
   CheckCircle2,
@@ -131,10 +132,13 @@ type FieldErrors = { name?: string; phone?: string; address?: string };
 export interface DirectOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
+  fullPage?: boolean;
+  backLabel?: string;
   product?: Product | null;
   quantity?: number;
   cartItems?: CartItem[];
   productsToOrder?: CartItem[];
+  onCartItemsChange?: (items: CartItem[]) => void;
   onPlaceOrder?: (order: OrderItem) => void | Promise<OrderItem | null | void>;
   onOrderSuccess?: (order: OrderItem) => void;
   customerProfile?: {
@@ -156,10 +160,13 @@ export interface DirectOrderModalProps {
 export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
   isOpen,
   onClose,
+  fullPage = false,
+  backLabel = "Back to Product Details",
   product,
   quantity = 1,
   cartItems = [],
   productsToOrder = [],
+  onCartItemsChange,
   onPlaceOrder,
   onOrderSuccess,
   customerProfile,
@@ -193,7 +200,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
   const [placedOrder, setPlacedOrder] = useState<OrderItem | null>(null);
   const [copiedOrderId, setCopiedOrderId] = useState(false);
 
-  // Reset state and load items every time the modal opens.
+  // Reset state and load items every time checkout opens.
   // Returning customers get their last name / phone / address pre-filled.
   useEffect(() => {
     if (!isOpen) return;
@@ -256,9 +263,9 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
     };
   }, [isOpen]);
 
-  // Lock page scroll behind the modal and close on Escape
+  // Lock scrolling and handle Escape only while checkout is presented as a modal.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || fullPage) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (e: KeyboardEvent) => {
@@ -269,7 +276,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, fullPage, onClose]);
 
   if (!isOpen) return null;
 
@@ -279,21 +286,23 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
 
   /* ----- quantity helpers (by line index, so the same product with different variants stays separate) ----- */
   const handleUpdateQuantity = (index: number, delta: number) => {
-    setItems((prev) =>
-      prev.map((item, i) => {
-        if (i !== index) return item;
-        const next = Math.min(
-          maxQtyFor(item.product),
-          Math.max(1, item.quantity + delta),
-        );
-        return { ...item, quantity: next };
-      }),
-    );
+    const updatedItems = items.map((item, i) => {
+      if (i !== index) return item;
+      const next = Math.min(
+        maxQtyFor(item.product),
+        Math.max(1, item.quantity + delta),
+      );
+      return { ...item, quantity: next };
+    });
+    setItems(updatedItems);
+    onCartItemsChange?.(updatedItems);
   };
 
   const handleRemoveItem = (index: number) => {
-    if (items.length <= 1) return;
-    setItems((prev) => prev.filter((_, i) => i !== index));
+    if (items.length <= 1 && !onCartItemsChange) return;
+    const updatedItems = items.filter((_, i) => i !== index);
+    setItems(updatedItems);
+    onCartItemsChange?.(updatedItems);
   };
 
   /* ----- calculations ----- */
@@ -307,7 +316,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
   )
     ? "inside_dhaka"
     : "outside_dhaka";
-  const deliveryCharge = DELIVERY_FEE[deliveryZone];
+  const deliveryCharge = items.length > 0 ? DELIVERY_FEE[deliveryZone] : 0;
   const total = subtotal + deliveryCharge;
   const isMfsPayment = paymentMethod !== "cod";
   const paymentProvider = paymentMethod === "nagad" ? "Nagad" : "bKash";
@@ -545,21 +554,35 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
   /* ---------------- render ---------------- */
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4"
-      onClick={requestClose}
+      className={
+        fullPage
+          ? "w-full bg-[#f8f9fa] px-3 py-4 sm:px-4 sm:py-6 lg:px-6"
+          : "fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+      }
+      onClick={fullPage ? undefined : requestClose}
     >
       <div
-        role="dialog"
-        aria-modal="true"
+        role={fullPage ? undefined : "dialog"}
+        aria-modal={fullPage ? undefined : true}
         aria-labelledby="checkout-title"
         onClick={(e) => e.stopPropagation()}
-        className="animate-sheet-up relative w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[94dvh] sm:max-h-[90vh] overflow-hidden"
+        className={
+          fullPage
+            ? "mx-auto flex w-full max-w-6xl flex-col rounded-2xl border border-gray-200 bg-white shadow-sm sm:rounded-3xl"
+            : "animate-sheet-up relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-2xl sm:rounded-3xl"
+        }
       >
         {/* Header */}
-        <div className="shrink-0 bg-gradient-to-r from-[#00503a] via-[#006a4e] to-[#003828] text-white">
-          <div className="sm:hidden flex justify-center pt-2">
-            <span className="h-1 w-10 rounded-full bg-white/30" />
-          </div>
+        <div
+          className={`shrink-0 bg-gradient-to-r from-[#00503a] via-[#006a4e] to-[#003828] text-white ${
+            fullPage ? "rounded-t-2xl sm:rounded-t-3xl" : ""
+          }`}
+        >
+          {!fullPage && (
+            <div className="flex justify-center pt-2 sm:hidden">
+              <span className="h-1 w-10 rounded-full bg-white/30" />
+            </div>
+          )}
           <div className="px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
@@ -585,21 +608,35 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={requestClose}
-              aria-label="Close"
-              className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {fullPage ? (
+              <button
+                type="button"
+                onClick={requestClose}
+                disabled={isSubmitting}
+                className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-white/30 px-3 text-xs font-bold text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span>{backLabel}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={requestClose}
+                aria-label="Close"
+                className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 
         {placedOrder ? (
           /* ================= SUCCESS ================= */
           <>
-            <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-6">
+            <div
+              className={`${fullPage ? "" : "flex-1 overflow-y-auto overscroll-contain"} px-4 py-6 sm:px-6`}
+            >
               <div className="text-center space-y-3">
                 <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto ring-8 ring-emerald-50">
                   <CheckCircle2 className="w-9 h-9 text-[#006a4e]" />
@@ -719,7 +756,9 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
               </div>
             </div>
 
-            <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row gap-2.5">
+            <div
+              className={`${fullPage ? "sticky bottom-0 z-10" : "shrink-0"} flex flex-col gap-2.5 border-t border-gray-200 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:px-6`}
+            >
               <a
                 href={buildWhatsAppUrl(placedOrder)}
                 target="_blank"
@@ -741,121 +780,154 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
         ) : (
           /* ================= CHECKOUT FORM ================= */
           <>
-            <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-5">
+            <div
+              className={`${fullPage ? "" : "flex-1 overflow-y-auto overscroll-contain"} px-4 py-4 sm:px-6 sm:py-5`}
+            >
               <form
                 id="checkout-form"
                 onSubmit={handleSubmitOrder}
                 noValidate
-                className="space-y-6"
+                className={`space-y-6 ${
+                  fullPage
+                    ? "md:grid md:grid-cols-2 md:items-start md:gap-6 md:space-y-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]"
+                    : ""
+                }`}
               >
                 {/* Items */}
-                <section aria-label="Order items">
+                <section
+                  aria-label="Order items"
+                  className={
+                    fullPage
+                      ? "md:col-start-1 md:row-start-1 lg:col-start-2"
+                      : undefined
+                  }
+                >
                   <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-2.5">
                     <ShoppingBag className="w-4 h-4 text-[#00503a]" />
                     Your items ({totalQty})
                   </h3>
 
-                  <ul className="space-y-2.5">
-                    {items.map((item, index) => {
-                      const max = maxQtyFor(item.product);
-                      const variant = variantText(item);
-                      const atMax = item.quantity >= max;
-                      const lowStock =
-                        item.product.stockQty !== undefined &&
-                        item.product.stockQty > 0 &&
-                        item.product.stockQty <=
-                          (item.product.lowStockThreshold ?? 5);
+                  {items.length > 0 ? (
+                    <ul className="space-y-2.5">
+                      {items.map((item, index) => {
+                        const max = maxQtyFor(item.product);
+                        const variant = variantText(item);
+                        const atMax = item.quantity >= max;
+                        const lowStock =
+                          item.product.stockQty !== undefined &&
+                          item.product.stockQty > 0 &&
+                          item.product.stockQty <=
+                            (item.product.lowStockThreshold ?? 5);
 
-                      return (
-                        <li
-                          key={`${item.product.id}-${variant}-${index}`}
-                          className="flex gap-3 p-3 rounded-2xl border border-gray-200 bg-[#f7faf8]"
-                        >
-                          <img
-                            src={item.product.image}
-                            alt={item.product.name}
-                            className="w-16 h-16 rounded-xl object-cover border border-gray-100 bg-white shrink-0"
-                            loading="lazy"
-                            decoding="async"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="flex-1 min-w-0 flex flex-col">
-                            <div className="flex items-start justify-between gap-2">
-                              <h4 className="text-sm font-bold text-gray-900 line-clamp-2 leading-snug">
-                                {item.product.name}
-                              </h4>
-                              {items.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveItem(index)}
-                                  aria-label={`Remove ${item.product.name}`}
-                                  className="-mt-1 -mr-1 w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-
-                            {variant && (
-                              <p className="text-[11px] text-gray-500 mt-0.5">
-                                {variant}
-                              </p>
-                            )}
-
-                            <div className="mt-auto pt-2 flex items-center justify-between gap-2">
-                              <span className="text-sm font-extrabold text-[#00503a] font-montserrat">
-                                {formatPrice(
-                                  item.product.price * item.quantity,
+                        return (
+                          <li
+                            key={`${item.product.id}-${variant}-${index}`}
+                            className="flex gap-3 p-3 rounded-2xl border border-gray-200 bg-[#f7faf8]"
+                          >
+                            <img
+                              src={item.product.image}
+                              alt={item.product.name}
+                              className="w-16 h-16 rounded-xl object-cover border border-gray-100 bg-white shrink-0"
+                              loading="lazy"
+                              decoding="async"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="flex-1 min-w-0 flex flex-col">
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className="text-sm font-bold text-gray-900 line-clamp-2 leading-snug">
+                                  {item.product.name}
+                                </h4>
+                                {(items.length > 1 || onCartItemsChange) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveItem(index)}
+                                    aria-label={`Remove ${item.product.name}`}
+                                    className="-mt-1 -mr-1 w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 )}
-                              </span>
-
-                              <div className="flex items-center border border-gray-200 rounded-xl bg-white">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleUpdateQuantity(index, -1)
-                                  }
-                                  disabled={item.quantity <= 1}
-                                  aria-label="Decrease quantity"
-                                  className="w-9 h-9 rounded-l-xl flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                                >
-                                  <Minus className="w-3.5 h-3.5" />
-                                </button>
-                                <span className="w-8 text-center text-sm font-bold text-[#00503a]">
-                                  {item.quantity}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateQuantity(index, 1)}
-                                  disabled={atMax}
-                                  aria-label="Increase quantity"
-                                  className="w-9 h-9 rounded-r-xl flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
                               </div>
-                            </div>
 
-                            {(atMax && max < 99) || lowStock ? (
-                              <p className="text-[11px] font-semibold text-amber-600 mt-1.5">
-                                Only {item.product.stockQty} left in stock
-                              </p>
-                            ) : null}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                              {variant && (
+                                <p className="text-[11px] text-gray-500 mt-0.5">
+                                  {variant}
+                                </p>
+                              )}
+
+                              <div className="mt-auto pt-2 flex items-center justify-between gap-2">
+                                <span className="text-sm font-extrabold text-[#00503a] font-montserrat">
+                                  {formatPrice(
+                                    item.product.price * item.quantity,
+                                  )}
+                                </span>
+
+                                <div className="flex items-center border border-gray-200 rounded-xl bg-white">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateQuantity(index, -1)
+                                    }
+                                    disabled={item.quantity <= 1}
+                                    aria-label="Decrease quantity"
+                                    className="w-9 h-9 rounded-l-xl flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <span className="w-8 text-center text-sm font-bold text-[#00503a]">
+                                    {item.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateQuantity(index, 1)
+                                    }
+                                    disabled={atMax}
+                                    aria-label="Increase quantity"
+                                    className="w-9 h-9 rounded-r-xl flex items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {(atMax && max < 99) || lowStock ? (
+                                <p className="text-[11px] font-semibold text-amber-600 mt-1.5">
+                                  Only {item.product.stockQty} left in stock
+                                </p>
+                              ) : null}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600">
+                      No items to check out. Add products to your cart and try
+                      again.
+                    </p>
+                  )}
                 </section>
 
                 {/* Delivery details */}
-                <section aria-label="Delivery details" className="space-y-4">
+                <section
+                  aria-label="Delivery details"
+                  className={`space-y-4 ${
+                    fullPage
+                      ? "md:col-start-2 md:row-start-1 lg:col-start-1"
+                      : ""
+                  }`}
+                >
                   <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-2">
                     <MapPin className="w-4 h-4 text-[#00503a]" />
                     Delivery details
                   </h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div
+                    className={`grid grid-cols-1 gap-4 ${
+                      fullPage ? "md:grid-cols-2" : "sm:grid-cols-2"
+                    }`}
+                  >
                     <Field
                       id="checkout-name"
                       label="Full name"
@@ -1045,12 +1117,23 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                 </section>
 
                 {/* Payment */}
-                <section aria-label="Payment method">
+                <section
+                  aria-label="Payment method"
+                  className={
+                    fullPage
+                      ? "md:col-start-1 md:row-start-2 lg:row-start-2"
+                      : undefined
+                  }
+                >
                   <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-2.5">
                     <Banknote className="w-4 h-4 text-[#00503a]" />
                     Payment
                   </h3>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div
+                    className={`grid gap-2 ${
+                      fullPage ? "grid-cols-1 lg:grid-cols-2" : "sm:grid-cols-2"
+                    }`}
+                  >
                     {(
                       [
                         ["cod", "Cash on Delivery", "Pay when your order arrives."],
@@ -1281,7 +1364,11 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                 {/* Price summary */}
                 <section
                   aria-label="Price summary"
-                  className="bg-gradient-to-br from-[#f8faf9] to-[#edf5f1] p-4 rounded-2xl border border-emerald-100 space-y-2 text-sm"
+                  className={`space-y-2 rounded-2xl border border-emerald-100 bg-gradient-to-br from-[#f8faf9] to-[#edf5f1] p-4 text-sm ${
+                    fullPage
+                      ? "md:col-start-2 md:row-start-2"
+                      : ""
+                  }`}
                 >
                   <div className="flex justify-between text-gray-600">
                     <span>Subtotal</span>
@@ -1306,7 +1393,9 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
             </div>
 
             {/* Sticky action bar: always visible on mobile */}
-            <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_16px_-8px_rgba(0,0,0,0.12)]">
+            <div
+              className={`${fullPage ? "sticky bottom-0 z-10" : "shrink-0"} border-t border-gray-200 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_16px_-8px_rgba(0,0,0,0.12)] sm:px-6`}
+            >
               {submitError && (
                 <div
                   role="alert"

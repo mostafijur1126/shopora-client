@@ -1,7 +1,7 @@
 import React from "react";
 import { OrderItem, CourierAssignment } from "../../types";
 import {
-  X,
+  ArrowLeft,
   User,
   Phone,
   Mail,
@@ -26,8 +26,7 @@ import {
 
 interface AdminViewOrderModalProps {
   order: OrderItem;
-  isOpen: boolean;
-  onClose: () => void;
+  onBack: () => void;
   onEditOrder?: (order: OrderItem) => void;
   onOpenInvoice?: (order: OrderItem) => void;
   onUpdateStatus?: (orderId: string, status: OrderItem["status"]) => void;
@@ -44,8 +43,7 @@ interface AdminViewOrderModalProps {
 
 export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
   order,
-  isOpen,
-  onClose,
+  onBack,
   onEditOrder,
   onOpenInvoice,
   onUpdateStatus,
@@ -62,8 +60,6 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
   >("cash");
   const [paymentBusy, setPaymentBusy] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState("");
-
-  if (!isOpen) return null;
 
   const subtotal =
     order.subtotal ||
@@ -196,17 +192,16 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs overflow-y-auto animate-in fade-in">
-      <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-gray-200 overflow-hidden my-auto max-h-[92vh] flex flex-col font-sans">
-        {/* Modal Top Header */}
-        <div className="p-4 sm:p-5 bg-[#003828] text-white flex items-center justify-between shrink-0 shadow-md">
-          <div className="flex items-center gap-3">
+    <div className="w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col font-sans">
+      {/* Page Header */}
+      <div className="p-4 sm:p-5 bg-[#003828] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+        <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center border border-white/20">
               <Package className="w-5 h-5 text-[#9ef4d0]" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-white font-montserrat">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-white font-montserrat break-words">
                   Order Details: #{order.id}
                 </h2>
                 <span
@@ -221,49 +216,50 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                 <span>Placed on: {order.date}</span>
               </p>
             </div>
-          </div>
+        </div>
 
-          <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
             {onEditOrder && (
               <button
                 onClick={() => {
-                  onClose();
+                  onBack();
                   onEditOrder(order);
                 }}
-                className="flex items-center gap-1.5 bg-[#9ef4d0] hover:bg-[#8ee5c0] text-[#003828] text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-xs"
+                className="min-h-11 flex items-center justify-center gap-1.5 bg-[#9ef4d0] hover:bg-[#8ee5c0] text-[#003828] text-xs font-bold px-3 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
                 title="Edit this Order"
               >
                 <Edit className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Edit Order</span>
+                <span>Edit Order</span>
               </button>
             )}
 
             {onOpenInvoice && (
               <button
                 onClick={() => {
-                  onClose();
+                  onBack();
                   onOpenInvoice(order);
                 }}
-                className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+                className="min-h-11 flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all cursor-pointer"
                 title="Print Packing Invoice"
               >
                 <FileText className="w-3.5 h-3.5 text-[#9ef4d0]" />
-                <span className="hidden sm:inline">Invoice</span>
+                <span>Invoice</span>
               </button>
             )}
 
             <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
-              title="Close"
+              onClick={onBack}
+              className="min-h-11 col-span-2 sm:col-span-1 sm:w-auto rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center gap-2 px-3 transition-colors cursor-pointer text-xs font-bold"
+              title="Back"
             >
-              <X className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
             </button>
-          </div>
         </div>
+      </div>
 
-        {/* Modal Scrollable Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 bg-gray-50/50 text-xs sm:text-sm">
+        {/* Order Details */}
+        <div className="p-3 sm:p-5 lg:p-6 space-y-5 bg-gray-50/50 text-xs sm:text-sm">
           {/* Quick Status Control Bar */}
           {onUpdateStatus && (
             <div className="bg-white p-3.5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -275,11 +271,11 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                   Update current fulfillment state
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 overflow-x-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:flex xl:flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => onUpdateStatus(order.id, "pending")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-11 px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                     order.status === "pending"
                       ? "bg-amber-500 text-white shadow-xs"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -290,7 +286,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={() => onUpdateStatus(order.id, "processing")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-11 px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                     order.status === "processing"
                       ? "bg-blue-600 text-white shadow-xs"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -301,7 +297,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={() => onUpdateStatus(order.id, "completed")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-11 px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                     order.status === "completed"
                       ? "bg-[#00503a] text-white shadow-xs"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -312,7 +308,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={() => onUpdateStatus(order.id, "return_received")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-11 px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                     order.status === "return_received"
                       ? "bg-violet-600 text-white shadow-xs"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -323,7 +319,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={() => onUpdateStatus(order.id, "cancelled")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-h-11 px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                     order.status === "cancelled"
                       ? "bg-red-600 text-white shadow-xs"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -360,12 +356,12 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                   <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider block">
                     Full Name
                   </span>
-                  <p className="font-bold text-gray-900 text-sm">
+                  <p                   className="font-bold text-gray-900 text-sm break-words">
                     {order.customerName}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
                     <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider block">
                       Phone Number
@@ -383,7 +379,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                       <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider block">
                         Email
                       </span>
-                      <p className="text-gray-700 text-xs flex items-center gap-1">
+                      <p className="text-gray-700 text-xs flex items-center gap-1 break-all">
                         <Mail className="w-3.5 h-3.5 text-gray-400" />
                         <span>{order.email}</span>
                       </p>
@@ -397,11 +393,11 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                   </span>
                   <p className="text-gray-800 flex items-start gap-1.5 mt-0.5 text-xs bg-gray-50 p-2.5 rounded-xl border border-gray-200/80">
                     <MapPin className="w-4 h-4 text-[#00503a] shrink-0 mt-0.5" />
-                    <span>{order.address}</span>
+                    <span className="break-words">{order.address}</span>
                   </p>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                   {order.district && (
                     <div>
                       <span className="text-gray-500">District: </span>
@@ -445,7 +441,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
 
                 {order.courier ? (
                   <div className="space-y-2.5">
-                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-200/80">
+                    <div className="flex flex-wrap justify-between items-center gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200/80">
                       <div>
                         <span className="text-[10px] uppercase font-bold text-gray-500 block">
                           Partner
@@ -459,12 +455,12 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-200/80">
-                      <div>
+                    <div className="flex flex-wrap justify-between items-center gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200/80">
+                      <div className="min-w-0">
                         <span className="text-[10px] uppercase font-bold text-gray-500 block">
                           Tracking Code
                         </span>
-                        <p className="font-mono font-bold text-xs text-gray-900">
+                        <p className="font-mono font-bold text-xs text-gray-900 break-all">
                           {order.courier.trackingId}
                         </p>
                       </div>
@@ -472,7 +468,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                         onClick={() =>
                           handleCopyTracking(order.courier?.trackingId || "")
                         }
-                        className="flex items-center gap-1 text-[11px] font-bold text-[#00503a] hover:bg-emerald-50 px-2 py-1 rounded border border-gray-200 cursor-pointer"
+                        className="min-h-11 flex items-center gap-1 text-[11px] font-bold text-[#00503a] hover:bg-emerald-50 px-2 py-1 rounded border border-gray-200 cursor-pointer"
                       >
                         {copiedTracking ? (
                           <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -497,7 +493,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                     {onEditOrder && (
                       <button
                         onClick={() => {
-                          onClose();
+                                  onBack();
                           onEditOrder(order);
                         }}
                         className="inline-flex items-center gap-1.5 bg-[#00503a] text-white text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-[#003828] transition-all cursor-pointer"
@@ -527,7 +523,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
               <CreditCard className="w-4 h-4 text-[#00503a]" />
               <span>Payment Information</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div>
                 <span className="text-gray-500 block">Order Total</span>
                 <strong>{order.total.toLocaleString()} tk</strong>
@@ -626,14 +622,14 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                                   [paymentId]: event.target.value,
                                 }))
                               }
-                              className="ml-2 h-9 w-28 rounded-lg border border-gray-300 bg-white px-2"
+                              className="ml-2 h-11 w-28 rounded-lg border border-gray-300 bg-white px-2"
                             />
                           </label>
                           <button
                             type="button"
                             disabled={paymentBusy}
                             onClick={() => reviewPayment(paymentId, "verified")}
-                            className="h-9 rounded-lg bg-emerald-700 px-3 text-xs font-bold text-white disabled:opacity-60"
+                            className="min-h-11 rounded-lg bg-emerald-700 px-3 text-xs font-bold text-white disabled:opacity-60"
                           >
                             Verify payment
                           </button>
@@ -641,7 +637,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                             type="button"
                             disabled={paymentBusy}
                             onClick={() => reviewPayment(paymentId, "rejected")}
-                            className="h-9 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 disabled:opacity-60"
+                            className="min-h-11 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 disabled:opacity-60"
                           >
                             Reject proof
                           </button>
@@ -678,7 +674,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                       event.target.value as "bkash" | "nagad" | "cash",
                     )
                   }
-                  className="h-10 rounded-lg border border-gray-300 bg-white px-2 text-xs"
+                  className="min-h-11 rounded-lg border border-gray-300 bg-white px-2 text-xs"
                 >
                   <option value="cash">Cash / COD</option>
                   <option value="bkash">bKash</option>
@@ -687,7 +683,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                 <button
                   type="submit"
                   disabled={paymentBusy}
-                  className="h-10 rounded-lg bg-[#00503a] px-3 text-xs font-bold text-white disabled:opacity-60"
+                  className="min-h-11 rounded-lg bg-[#00503a] px-3 text-xs font-bold text-white disabled:opacity-60"
                 >
                   Add payment
                 </button>
@@ -702,7 +698,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
 
           {/* Ordered Products Table */}
           <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden">
-            <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <div className="p-3 sm:p-4 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-[#003828] font-bold text-sm">
                 <Package className="w-4 h-4 text-[#00503a]" />
                 <span>Ordered Items & Quantities</span>
@@ -715,80 +711,104 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
               </span>
             </div>
 
-            <div className="divide-y divide-gray-100 overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#f8faf9] text-gray-600 font-bold uppercase text-[10px] border-b border-gray-200">
-                  <tr>
-                    <th className="py-2.5 px-4">Item</th>
-                    <th className="py-2.5 px-3 text-center">Unit Price</th>
-                    <th className="py-2.5 px-3 text-center">Quantity</th>
-                    <th className="py-2.5 px-4 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {order.orderedProducts && order.orderedProducts.length > 0 ? (
-                    order.orderedProducts.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/60">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            {item.image && (
-                              <img
-                                src={item.image}
-                                alt={item.name}
-                                className="w-10 h-10 object-cover rounded-lg border border-gray-200"
-                              />
-                            )}
-                            <div>
-                              <p className="font-bold text-gray-900">
-                                {item.name}
-                              </p>
-                              {item.sku && (
-                                <p className="text-[10px] font-mono text-gray-400">
-                                  SKU: {item.sku}
-                                </p>
-                              )}
-                              {item.selectedSize && (
-                                <span className="text-gray-500">
-                                  Size: {item.selectedSize}
-                                </span>
-                              )}
-                              {item.selectedColor && (
-                                <span className="text-gray-500">
-                                  Color: {item.selectedColor}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 text-center font-montserrat font-medium text-gray-700">
-                          {item.price.toLocaleString()} tk
-                        </td>
-                        <td className="py-3 px-3 text-center font-bold text-gray-900">
-                          {item.quantity}
-                        </td>
-                        <td className="py-3 px-4 text-right font-montserrat font-bold text-gray-900">
-                          {(item.price * item.quantity).toLocaleString()} tk
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td className="py-3.5 px-4 font-bold text-gray-900">
-                        {order.items}
-                      </td>
-                      <td className="py-3.5 px-3 text-center font-montserrat text-gray-700">
-                        {subtotal.toLocaleString()} tk
-                      </td>
-                      <td className="py-3.5 px-3 text-center font-bold text-gray-900">
-                        1
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-montserrat font-bold text-gray-900">
-                        {subtotal.toLocaleString()} tk
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="divide-y divide-gray-100">
+              <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_8rem_7rem_8rem] gap-3 bg-[#f8faf9] px-4 py-2.5 text-[10px] font-bold uppercase text-gray-600">
+                <span>Item</span>
+                <span className="text-center">Unit Price</span>
+                <span className="text-center">Quantity</span>
+                <span className="text-right">Total</span>
+              </div>
+              {order.orderedProducts && order.orderedProducts.length > 0 ? (
+                order.orderedProducts.map((item, idx) => (
+                  <div
+                    key={item.id || idx}
+                    className="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_8rem_7rem_8rem] items-center gap-x-3 gap-y-2 p-3 sm:p-4 text-xs"
+                  >
+                    <div className="col-span-2 md:col-span-1 flex items-center gap-3 min-w-0">
+                      {item.image && (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-12 h-12 object-cover rounded-lg border border-gray-200 shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-900 break-words">
+                          {item.name}
+                        </p>
+                        {item.sku && (
+                          <p className="text-[10px] font-mono text-gray-400 break-all">
+                            SKU: {item.sku}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-x-2 text-[10px] text-gray-500">
+                          {(item.selectedModel || item.model) && (
+                            <span>Model: {item.selectedModel || item.model}</span>
+                          )}
+                          {item.selectedSize && (
+                            <span>Size: {item.selectedSize}</span>
+                          )}
+                          {item.selectedColor && (
+                            <span>Color: {item.selectedColor}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="md:text-center">
+                      <span className="block text-[10px] text-gray-500 md:hidden">
+                        Unit Price
+                      </span>
+                      <span className="font-montserrat font-medium text-gray-700">
+                        {item.price.toLocaleString()} tk
+                      </span>
+                    </div>
+                    <div className="md:text-center">
+                      <span className="block text-[10px] text-gray-500 md:hidden">
+                        Quantity
+                      </span>
+                      <span className="font-bold text-gray-900">
+                        {item.quantity}
+                      </span>
+                    </div>
+                    <div className="col-span-2 md:col-span-1 flex items-center justify-between md:justify-end border-t border-gray-100 pt-2 md:border-0 md:pt-0">
+                      <span className="text-[10px] text-gray-500 md:hidden">
+                        Total
+                      </span>
+                      <span className="font-montserrat font-bold text-gray-900">
+                        {(item.price * item.quantity).toLocaleString()} tk
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_8rem_7rem_8rem] items-center gap-x-3 gap-y-2 p-3 sm:p-4 text-xs">
+                  <p className="col-span-2 md:col-span-1 font-bold text-gray-900 break-words">
+                    {order.items}
+                  </p>
+                  <div>
+                    <span className="block text-[10px] text-gray-500 md:hidden">
+                      Unit Price
+                    </span>
+                    <span className="font-montserrat text-gray-700">
+                      {subtotal.toLocaleString()} tk
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-gray-500 md:hidden">
+                      Quantity
+                    </span>
+                    <span className="font-bold text-gray-900">1</span>
+                  </div>
+                  <div className="col-span-2 md:col-span-1 flex items-center justify-between md:justify-end border-t border-gray-100 pt-2 md:border-0 md:pt-0">
+                    <span className="text-[10px] text-gray-500 md:hidden">
+                      Total
+                    </span>
+                    <span className="font-montserrat font-bold text-gray-900">
+                      {subtotal.toLocaleString()} tk
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Financial Summary Calculation Card */}
@@ -827,16 +847,16 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Bottom Actions */}
-        <div className="p-4 sm:p-5 bg-white border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+        {/* Order Actions */}
+        <div className="p-3 sm:p-5 bg-white border-t border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="grid grid-cols-2 sm:flex gap-2 w-full md:w-auto">
             {onOpenInvoice && (
               <button
                 onClick={() => {
-                  onClose();
+                  onBack();
                   onOpenInvoice(order);
                 }}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#00503a] hover:bg-[#003828] text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                className="min-h-11 flex items-center justify-center gap-2 bg-[#00503a] hover:bg-[#003828] text-white px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs transition-colors cursor-pointer"
               >
                 <FileText className="w-4 h-4 text-[#9ef4d0]" />
                 <span>Print Invoice</span>
@@ -846,10 +866,10 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
             {onEditOrder && (
               <button
                 onClick={() => {
-                  onClose();
+                  onBack();
                   onEditOrder(order);
                 }}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2.5 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                className="min-h-11 flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs transition-colors cursor-pointer"
               >
                 <Edit className="w-4 h-4 text-gray-600" />
                 <span>Edit Order</span>
@@ -858,13 +878,12 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
-            className="w-full sm:w-auto px-6 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 font-bold text-xs transition-colors cursor-pointer"
+            onClick={onBack}
+            className="min-h-11 w-full md:w-auto px-6 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 font-bold text-xs transition-colors cursor-pointer"
           >
-            Close
+            Back
           </button>
         </div>
-      </div>
     </div>
   );
 };

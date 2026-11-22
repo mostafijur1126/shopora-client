@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Product, CategoryItem, ColorVariant } from "../../types";
 
 import {
+  ArrowLeft,
   X,
   Plus,
   Trash2,
@@ -369,7 +370,7 @@ interface AdminProductFormProps {
   existingProducts: Product[];
   /** Resolve true once the server has saved the product. The form closes only then. */
   onSubmit: (payload: Product) => Promise<boolean>;
-  onClose: () => void;
+  onBack: () => void;
 }
 
 export const AdminProductForm: React.FC<AdminProductFormProps> = ({
@@ -377,7 +378,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
   categories,
   existingProducts,
   onSubmit,
-  onClose,
+  onBack,
 }) => {
   const isEdit = Boolean(product);
 
@@ -426,25 +427,11 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     [],
   );
 
-  const requestClose = () => {
+  const requestBack = () => {
     if (saving) return;
     if (dirty && !window.confirm("Discard your changes?")) return;
-    onClose();
+    onBack();
   };
-
-  // Lock page scroll and close on Escape
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  });
 
   const clearError = (key: ErrorKey) => {
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
@@ -766,7 +753,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     try {
       const saved = await onSubmit(payload);
       if (saved) {
-        onClose();
+        onBack();
         return;
       }
       setSaveError(
@@ -795,19 +782,9 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
 
   /* ---------- render ---------- */
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-6"
-      onClick={requestClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="product-form-title"
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-3xl rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[96dvh] sm:max-h-[92vh] overflow-hidden"
-      >
-        {/* Header */}
-        <div className="shrink-0 bg-[#00503a] text-white px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+    <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Page Header */}
+        <div className="bg-[#00503a] text-white px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0">
             <h3
               id="product-form-title"
@@ -822,11 +799,11 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           </div>
           <button
             type="button"
-            onClick={requestClose}
-            aria-label="Close"
-            className="w-10 h-10 shrink-0 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center cursor-pointer"
+            onClick={requestBack}
+            className="min-h-11 w-full sm:w-auto shrink-0 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center gap-2 px-4 cursor-pointer text-xs font-bold"
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Products</span>
           </button>
         </div>
 
@@ -835,11 +812,11 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           id="product-form"
           onSubmit={handleSubmit}
           noValidate
-          className="flex-1 overflow-y-auto overscroll-contain bg-[#f8f9fa] p-3 sm:p-5 space-y-4"
+          className="bg-[#f8f9fa] p-3 sm:p-5 lg:p-6 space-y-4"
         >
           {/* 1. Basic info */}
           <Section title="Basic information">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field
                 id="pf-name"
                 label="Product name"
@@ -917,7 +894,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
 
           {/* 2. Price and stock */}
           <Section title="Price and stock">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field
                 id="pf-price"
                 label="Selling price (tk)"
@@ -1088,7 +1065,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
             hint={`The first photo is the main one. Up to ${MAX_IMAGES} photos, resized automatically.`}
           >
             <div id="pf-images" tabIndex={-1} className="outline-none">
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                 {form.images.map((src, index) => (
                   <div
                     key={`${index}-${src.slice(-24)}`}
@@ -1113,7 +1090,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                           onClick={() => makeMainImage(index)}
                           aria-label="Make this the main photo"
                           title="Make main"
-                          className="w-8 h-8 rounded-lg bg-white/90 text-amber-600 flex items-center justify-center cursor-pointer"
+                          className="w-10 h-10 rounded-lg bg-white/90 text-amber-600 flex items-center justify-center cursor-pointer"
                         >
                           <Star className="w-4 h-4" />
                         </button>
@@ -1125,7 +1102,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                         onClick={() => removeImage(index)}
                         aria-label="Remove photo"
                         title="Remove"
-                        className="w-8 h-8 rounded-lg bg-white/90 text-red-600 flex items-center justify-center cursor-pointer"
+                        className="w-10 h-10 rounded-lg bg-white/90 text-red-600 flex items-center justify-center cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1220,7 +1197,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                 {form.detailedDescription.length} characters
               </p>
             </Field>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field
                 id="pf-deliveryTime"
                 label="Delivery time"
@@ -1276,7 +1253,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                         })
                       }
                       aria-label={`Remove feature ${f}`}
-                      className="w-7 h-7 -my-1 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
+                      className="w-9 h-9 -my-1 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1336,7 +1313,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                         })
                       }
                       aria-label={`Remove ${s.key}`}
-                      className="w-7 h-7 shrink-0 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
+                      className="w-9 h-9 shrink-0 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1344,7 +1321,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                 ))}
               </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
               <input
                 type="text"
                 value={specKey}
@@ -1426,7 +1403,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                               })
                             }
                             aria-label={`Remove ${c.name}`}
-                            className="w-7 h-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
+                            className="w-9 h-9 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -1434,7 +1411,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                       ))}
                     </div>
                   )}
-                  <div className="grid grid-cols-[3rem_1fr_auto] gap-2">
+                  <div className="grid grid-cols-[3rem_minmax(0,1fr)_auto] gap-2">
                     <input
                       type="color"
                       value={colorHex}
@@ -1454,7 +1431,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                       }}
                       placeholder="Color name"
                       aria-label="Color name"
-                      className={inputCls()}
+                      className={`${inputCls()} min-w-0`}
                     />
                     <button
                       type="button"
@@ -1528,7 +1505,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                               })
                             }
                             aria-label={`Remove size ${s}`}
-                            className="w-7 h-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
+                            className="w-9 h-9 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -1616,7 +1593,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                         type="button"
                         onClick={() => removeModel(m)}
                         aria-label={`Remove model ${m}`}
-                        className="w-7 h-7 rounded-md hover:bg-black/10 flex items-center justify-center cursor-pointer"
+                        className="w-9 h-9 rounded-md hover:bg-black/10 flex items-center justify-center cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1653,7 +1630,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
 
           {/* 8. Display options */}
           <Section title="Display options">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 cursor-pointer">
                 <span className="text-sm font-semibold text-gray-800">
                   Popular badge
@@ -1680,7 +1657,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
                 Product page sections
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {(
                   [
                     ["description", "Description and features"],
@@ -1712,7 +1689,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
         </form>
 
         {/* Footer */}
-        <div className="shrink-0 bg-white border-t border-gray-200 px-4 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2.5">
+        <div className="bg-white border-t border-gray-200 px-4 sm:px-6 py-4 space-y-2.5">
           {(saveError || flash) && (
             <div
               role="alert"
@@ -1726,20 +1703,20 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
               <span>{saveError || flash}</span>
             </div>
           )}
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex flex-col-reverse md:flex-row md:justify-end gap-2">
             <button
               type="button"
-              onClick={requestClose}
+              onClick={requestBack}
               disabled={saving}
-              className="h-12 px-5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 text-sm font-bold cursor-pointer"
+              className="min-h-11 w-full md:w-auto px-5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 text-sm font-bold cursor-pointer"
             >
-              Cancel
+              Back to Products
             </button>
             <button
               type="submit"
               form="product-form"
               disabled={saving || uploading > 0}
-              className="h-12 px-6 rounded-xl bg-[#00503a] hover:bg-[#003828] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold flex items-center gap-2 shadow-md cursor-pointer min-w-[140px] justify-center"
+              className="min-h-11 w-full md:w-auto px-6 rounded-xl bg-[#00503a] hover:bg-[#003828] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold flex items-center gap-2 shadow-md cursor-pointer min-w-[140px] justify-center"
             >
               {saving ? (
                 <>
@@ -1758,7 +1735,6 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                 </>
               )}
             </button>
-          </div>
         </div>
       </div>
     </div>

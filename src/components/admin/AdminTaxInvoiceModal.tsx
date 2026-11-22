@@ -1,12 +1,11 @@
 import React, { useRef, useState } from "react";
 import { OrderItem } from "../../types";
+import { useStoreContactSettings } from "../../hooks/useStoreContactSettings";
 import {
   X,
   Printer,
   ShieldCheck,
-  Phone,
   MapPin,
-  Mail,
   FileText,
 } from "lucide-react";
 
@@ -23,6 +22,12 @@ export const AdminTaxInvoiceModal: React.FC<AdminTaxInvoiceModalProps> = ({
 }) => {
   const activeOrders =
     orders && orders.length > 0 ? orders : order ? [order] : [];
+  const {
+    settings: storeSettings,
+    isLoading: isStoreSettingsLoading,
+    error: storeSettingsError,
+    reload: reloadStoreSettings,
+  } = useStoreContactSettings();
 
   const printAreaRef = useRef<HTMLDivElement>(null);
   const isPrintingRef = useRef(false);
@@ -246,7 +251,7 @@ export const AdminTaxInvoiceModal: React.FC<AdminTaxInvoiceModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              disabled={isPrinting}
+              disabled={isPrinting || isStoreSettingsLoading}
               className="flex items-center gap-1.5 bg-[#00503a] hover:bg-[#003828] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -264,6 +269,30 @@ export const AdminTaxInvoiceModal: React.FC<AdminTaxInvoiceModalProps> = ({
             </button>
           </div>
         </div>
+
+        {(isStoreSettingsLoading || storeSettingsError) && (
+          <div
+            role={storeSettingsError ? "alert" : "status"}
+            className="print:hidden border-b border-gray-200 bg-amber-50 px-5 py-2 text-xs text-amber-900"
+          >
+            {storeSettingsError ? (
+              <span className="flex items-center justify-between gap-3">
+                <span>
+                  Store details could not be loaded: {storeSettingsError}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void reloadStoreSettings()}
+                  className="shrink-0 font-bold underline"
+                >
+                  Retry
+                </button>
+              </span>
+            ) : (
+              "Loading current store details..."
+            )}
+          </div>
+        )}
 
         {/* Printable Invoice Sheet Container */}
         <div
@@ -300,25 +329,23 @@ export const AdminTaxInvoiceModal: React.FC<AdminTaxInvoiceModalProps> = ({
                 {/* Invoice Header */}
                 <div className="border-b-2 border-[#00503a] pb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-9 h-9 rounded-xl bg-[#00503a] text-white flex items-center justify-center font-bold text-lg font-montserrat">
-                        A
-                      </div>
-                      <span className="text-2xl font-black text-[#003828] font-montserrat tracking-tight">
-                        AmarShop BD
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Authentic Lifestyle & Premium Heritage E-Commerce
+                    <h1 className="text-2xl font-black text-[#003828] font-montserrat tracking-tight break-words">
+                      {storeSettings.shopName.trim() || "Store name not configured"}
+                    </h1>
+                    <p className="text-xs text-gray-600 mt-2 break-words">
+                      Hotline:{" "}
+                      {storeSettings.hotlineNumber.trim() || "Not configured"}
+                      <span className="mx-2 text-gray-300">|</span>
+                      Email:{" "}
+                      {storeSettings.shopEmail.trim() || "Not configured"}
                     </p>
-                    <div className="mt-2 text-[11px] text-gray-600 space-y-0.5">
-                      <p className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-[#00503a]" /> House #42,
-                        Road #8/A, Dhanmondi, Dhaka - 1209
-                      </p>
-                      <p className="flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-[#00503a]" /> +880
-                        1700-000000 | support@amarshopbd.com
+                    <div className="mt-1.5 text-[11px] text-gray-600">
+                      <p className="flex items-start gap-1">
+                        <MapPin className="w-3 h-3 text-[#00503a] shrink-0 mt-0.5" />
+                        <span>
+                          {storeSettings.storeAddress.trim() ||
+                            "Address not configured"}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -473,7 +500,7 @@ export const AdminTaxInvoiceModal: React.FC<AdminTaxInvoiceModalProps> = ({
                     <div className="w-18 h-18 rounded-full border-2 border-dashed border-[#00503a]/40 flex flex-col items-center justify-center text-[#00503a] p-1 rotate-[-8deg] bg-emerald-50/50">
                       <ShieldCheck className="w-5 h-5" />
                       <span className="text-[9px] font-black uppercase tracking-wider text-center leading-tight">
-                        AmarShop Verified
+                        Store Verified
                       </span>
                     </div>
                     <div className="text-xs text-gray-500 space-y-0.5">
@@ -526,8 +553,7 @@ export const AdminTaxInvoiceModal: React.FC<AdminTaxInvoiceModalProps> = ({
 
                 {/* Footer Note */}
                 <div className="mt-8 pt-4 border-t border-gray-100 text-center text-[10px] text-gray-400">
-                  Thank you for shopping with AmarShop BD! For inquiries and
-                  support, contact +880 1700-000000 or support@amarshopbd.com
+                  Thank you for your purchase.
                 </div>
               </div>
             );

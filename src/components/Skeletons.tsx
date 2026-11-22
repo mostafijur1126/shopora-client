@@ -212,20 +212,36 @@ export const CartSkeleton: React.FC = () => (
   </div>
 );
 
-export const CheckoutSkeleton: React.FC = () => (
+export const CheckoutSkeleton: React.FC<{ fullPage?: boolean }> = ({
+  fullPage = false,
+}) => (
   <div
     role="status"
     aria-busy="true"
     aria-label="Loading checkout"
-    className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+    className={
+      fullPage
+        ? "w-full bg-[#f8f9fa] px-3 py-4 sm:px-4 sm:py-6 lg:px-6"
+        : "fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+    }
   >
     <span className="sr-only">Loading checkout…</span>
-    <div className="relative w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 space-y-5">
+    <div
+      className={
+        fullPage
+          ? "mx-auto w-full max-w-6xl space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:rounded-3xl sm:p-7"
+          : "relative w-full space-y-5 rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-2xl sm:rounded-3xl sm:p-7"
+      }
+    >
       <div className="flex items-center justify-between">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="h-10 w-10 rounded-xl" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div
+        className={`grid grid-cols-1 gap-4 ${
+          fullPage ? "md:grid-cols-2" : "sm:grid-cols-2"
+        }`}
+      >
         {Array.from({ length: 6 }, (_, index) => (
           <Skeleton key={index} className="h-12 w-full rounded-xl" />
         ))}

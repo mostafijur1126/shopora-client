@@ -49,7 +49,7 @@ interface AdminOrderTrackingProps {
   orders?: OrderItem[];
   products?: Product[];
   onAddOrder?: (newOrder: OrderItem) => void;
-  onUpdateOrder?: (updatedOrder: OrderItem) => void;
+  onUpdateOrder?: (updatedOrder: OrderItem) => void | Promise<unknown>;
   onUpdateOrderStatus: (orderId: string, status: OrderItem["status"]) => void;
   onUpdateOrderCourier?: (orderId: string, courier: CourierAssignment) => void;
   onDeleteOrder: (orderId: string) => void;
@@ -143,6 +143,83 @@ export const AdminOrderTracking: React.FC<AdminOrderTrackingProps> = ({
 
     return matchesSearch && matchesStatus;
   });
+
+  if (selectedEditOrder) {
+    return (
+      <Suspense
+        fallback={
+          <div role="status" className="rounded-2xl bg-white p-6 text-sm text-gray-500">
+            Loading order editor...
+          </div>
+        }
+      >
+        <AdminEditOrderModal
+          order={selectedEditOrder}
+          onBack={() => setSelectedEditOrder(null)}
+          products={products}
+          onUpdateOrder={async (updatedOrder) => {
+            if (onUpdateOrder) {
+              await onUpdateOrder(updatedOrder);
+            } else {
+              onUpdateOrderStatus(updatedOrder.id, updatedOrder.status);
+            }
+            showFeedback(`Order #${updatedOrder.id} successfully updated!`);
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  if (selectedViewOrder) {
+    return (
+      <Suspense fallback={null}>
+        <AdminViewOrderModal
+          order={selectedViewOrder}
+          onBack={() => setSelectedViewOrder(null)}
+          onEditOrder={(orderToEdit) => {
+            setSelectedViewOrder(null);
+            setSelectedEditOrder(orderToEdit);
+          }}
+          onOpenInvoice={(orderToInvoice) => {
+            setSelectedViewOrder(null);
+            setSelectedInvoiceOrder(orderToInvoice);
+          }}
+          onUpdateStatus={(orderId, newStatus) => {
+            onUpdateOrderStatus(orderId, newStatus);
+            setSelectedViewOrder((prev) =>
+              prev && prev.id === orderId
+                ? { ...prev, status: newStatus }
+                : prev,
+            );
+            showFeedback(`Order #${orderId} status changed to ${newStatus}`);
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  if (isManualOrderModalOpen) {
+    return (
+      <Suspense fallback={null}>
+        <AdminManualOrderModal
+          onBack={() => setIsManualOrderModalOpen(false)}
+          products={products}
+          onAddOrder={async (newOrder) => {
+            const saved = (onAddOrder
+              ? onAddOrder(newOrder)
+              : undefined) as unknown as OrderItem | null | undefined;
+            if (saved !== null) {
+              showFeedback(
+                `Manual order #${saved?.invoiceId || newOrder.id} created successfully!`,
+              );
+            }
+            return saved;
+          }}
+          onOpenInvoice={(order) => setSelectedInvoiceOrder(order)}
+        />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="space-y-6 font-sans">
@@ -438,55 +515,6 @@ export const AdminOrderTracking: React.FC<AdminOrderTrackingProps> = ({
         </div>
       </div>
 
-      {/* 👁️ View Order Details Modal */}
-      {selectedViewOrder && (
-        <Suspense fallback={null}>
-          <AdminViewOrderModal
-            order={selectedViewOrder}
-            isOpen={Boolean(selectedViewOrder)}
-            onClose={() => setSelectedViewOrder(null)}
-            onEditOrder={(orderToEdit) => {
-              setSelectedViewOrder(null);
-              setSelectedEditOrder(orderToEdit);
-            }}
-            onOpenInvoice={(orderToInvoice) => {
-              setSelectedViewOrder(null);
-              setSelectedInvoiceOrder(orderToInvoice);
-            }}
-            onUpdateStatus={(orderId, newStatus) => {
-              onUpdateOrderStatus(orderId, newStatus);
-              setSelectedViewOrder((prev) =>
-                prev && prev.id === orderId
-                  ? { ...prev, status: newStatus }
-                  : prev,
-              );
-              showFeedback(`Order #${orderId} status changed to ${newStatus}`);
-            }}
-          />
-        </Suspense>
-      )}
-
-      {/* ✏️ Edit Order Modal */}
-      {selectedEditOrder && (
-        <Suspense fallback={null}>
-          <AdminEditOrderModal
-            order={selectedEditOrder}
-            isOpen={Boolean(selectedEditOrder)}
-            onClose={() => setSelectedEditOrder(null)}
-            products={products}
-            onUpdateOrder={(updatedOrder) => {
-              if (onUpdateOrder) {
-                onUpdateOrder(updatedOrder);
-              } else {
-                onUpdateOrderStatus(updatedOrder.id, updatedOrder.status);
-              }
-              setSelectedEditOrder(null);
-              showFeedback(`Order #${updatedOrder.id} successfully updated!`);
-            }}
-          />
-        </Suspense>
-      )}
-
       {/* 🚚 Courier Assignment Modal */}
       {courierModalOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
@@ -590,28 +618,6 @@ export const AdminOrderTracking: React.FC<AdminOrderTrackingProps> = ({
         </Suspense>
       )}
 
-      {/* 🌟 Admin Manual Order Creation Modal */}
-      {isManualOrderModalOpen && (
-        <Suspense fallback={null}>
-          <AdminManualOrderModal
-            isOpen={isManualOrderModalOpen}
-            onClose={() => setIsManualOrderModalOpen(false)}
-            products={products}
-            onAddOrder={async (newOrder) => {
-              const saved = (onAddOrder
-                ? onAddOrder(newOrder)
-                : undefined) as unknown as OrderItem | null | undefined;
-              if (saved !== null) {
-                showFeedback(
-                  `Manual order #${saved?.invoiceId || newOrder.id} created successfully!`,
-                );
-              }
-              return saved;
-            }}
-            onOpenInvoice={(order) => setSelectedInvoiceOrder(order)}
-          />
-        </Suspense>
-      )}
     </div>
   );
 };

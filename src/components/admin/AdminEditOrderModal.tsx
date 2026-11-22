@@ -7,7 +7,7 @@ import {
 } from "../../types";
 import { BANGLADESH_DISTRICTS, isDhakaDistrict } from "../../data/districts";
 import {
-  X,
+  ArrowLeft,
   User,
   Phone,
   Mail,
@@ -81,8 +81,7 @@ interface FormState {
 
 interface AdminEditOrderModalProps {
   order: OrderItem;
-  isOpen: boolean;
-  onClose: () => void;
+  onBack: () => void;
   products?: Product[];
   onUpdateOrder: (updatedOrder: OrderItem) => void | Promise<unknown>;
 }
@@ -254,8 +253,7 @@ const inputCls = (bad?: boolean) =>
 
 export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
   order,
-  isOpen,
-  onClose,
+  onBack,
   products = [],
   onUpdateOrder,
 }) => {
@@ -290,28 +288,12 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
     return strip(form) !== strip(initial);
   }, [form, initial]);
 
-  const requestClose = () => {
+  const requestBack = () => {
     if (isSaving) return;
     if (isDirty && !window.confirm("You have unsaved changes. Discard them?"))
       return;
-    onClose();
+    onBack();
   };
-
-  // Lock background scroll + Escape to close
-  useEffect(() => {
-    if (!isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, isDirty, isSaving]);
 
   // Close product dropdown on outside click
   useEffect(() => {
@@ -325,8 +307,6 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
-
-  if (!isOpen) return null;
 
   /* ----- calculations ----- */
   const deliveryCharge =
@@ -416,7 +396,7 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
     setSubmitError("");
     try {
       await onUpdateOrder(updated);
-      onClose();
+      onBack();
     } catch {
       setSubmitError("Could not save the order. Please try again.");
       setIsSaving(false);
@@ -530,18 +510,8 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
   const displayId = o.invoiceId || o.id;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/65 backdrop-blur-xs sm:p-4"
-      onClick={requestClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-order-title"
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-4xl rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-200 overflow-hidden max-h-[95dvh] sm:max-h-[92vh] flex flex-col font-sans"
-      >
-        {/* Header */}
+    <div className="w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col font-sans">
+      {/* Header */}
         <div className="p-4 sm:p-5 bg-[#003828] text-white flex items-start sm:items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center border border-white/20 shrink-0">
@@ -574,11 +544,12 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
 
           <button
             type="button"
-            onClick={requestClose}
-            aria-label="Close"
-            className="w-10 h-10 shrink-0 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer"
+            onClick={requestBack}
+            disabled={isSaving}
+            className="shrink-0 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-60 px-3 py-2.5 flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:cursor-not-allowed text-xs sm:text-sm font-bold"
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Orders</span>
           </button>
         </div>
 
@@ -587,7 +558,7 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
           id="edit-order-form"
           onSubmit={handleSubmit}
           noValidate
-          className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1"
+          className="p-4 sm:p-6 space-y-5 flex-1"
         >
           {/* Order status */}
           <section className="bg-gray-50/80 p-4 sm:p-5 rounded-2xl border border-gray-200/80 space-y-3">
@@ -1209,8 +1180,8 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
           </div>
         </form>
 
-        {/* Sticky footer */}
-        <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_16px_-8px_rgba(0,0,0,0.12)]">
+        {/* Actions footer */}
+        <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {submitError && (
             <div
               role="alert"
@@ -1227,11 +1198,11 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={requestClose}
+                onClick={requestBack}
                 disabled={isSaving}
                 className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-60 font-bold text-sm transition-colors cursor-pointer"
               >
-                Cancel
+                Back to Orders
               </button>
               <button
                 type="submit"
@@ -1249,7 +1220,6 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 };

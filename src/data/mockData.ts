@@ -20,6 +20,7 @@ export const initialStoreSettings: StoreSettingsConfig = {
   bkashMerchant: "01700-000000",
   nagadMerchant: "01800-000000",
   rocketNumber: "01900-000000",
+  shopName: "",
   supportPhone: "",
   supportWhatsapp: "",
   supportEmail: "support@Shopora.com",

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { OrderItem } from "../../types";
+import { useStoreContactSettings } from "../../hooks/useStoreContactSettings";
 import { X, Printer, Package, Phone } from "lucide-react";
 
 interface AdminThermalLabelModalProps {
@@ -14,6 +15,12 @@ export const AdminThermalLabelModal: React.FC<AdminThermalLabelModalProps> = ({
   const printAreaRef = useRef<HTMLDivElement>(null);
   const isPrintingRef = useRef(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const {
+    settings: storeSettings,
+    isLoading: isStoreSettingsLoading,
+    error: storeSettingsError,
+    reload: reloadStoreSettings,
+  } = useStoreContactSettings();
 
   if (!orders || orders.length === 0) return null;
 
@@ -239,7 +246,7 @@ export const AdminThermalLabelModal: React.FC<AdminThermalLabelModalProps> = ({
             <button
               type="button"
               onClick={handlePrint}
-              disabled={isPrinting}
+              disabled={isPrinting || isStoreSettingsLoading}
               className="flex items-center gap-2 bg-[#00503a] hover:bg-[#003828] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
             >
               <Printer className="w-4 h-4" />
@@ -260,6 +267,30 @@ export const AdminThermalLabelModal: React.FC<AdminThermalLabelModalProps> = ({
             </button>
           </div>
         </div>
+
+        {(isStoreSettingsLoading || storeSettingsError) && (
+          <div
+            role={storeSettingsError ? "alert" : "status"}
+            className="print:hidden border-b border-gray-200 bg-amber-50 px-5 py-2 text-xs text-amber-900"
+          >
+            {storeSettingsError ? (
+              <span className="flex items-center justify-between gap-3">
+                <span>
+                  Store details could not be loaded: {storeSettingsError}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void reloadStoreSettings()}
+                  className="shrink-0 font-bold underline"
+                >
+                  Retry
+                </button>
+              </span>
+            ) : (
+              "Loading current store details..."
+            )}
+          </div>
+        )}
 
         {/* Printable Area */}
         <div
@@ -293,13 +324,24 @@ export const AdminThermalLabelModal: React.FC<AdminThermalLabelModalProps> = ({
                 {/* Header */}
                 <div className="flex items-center justify-between border-b-2 border-black pb-3">
                   <div>
-                    <h2 className="text-base font-black tracking-wider uppercase">
-                      AmarShop BD
+                    <h2 className="max-w-[190px] break-words text-base font-black tracking-wider uppercase leading-tight">
+                      {storeSettings.shopName.trim() ||
+                        "Store name not configured"}
                     </h2>
 
-                    <p className="text-[10px] font-sans text-gray-700">
-                      Official Merchant | 01700-000000
+                    <p className="max-w-[190px] break-words text-[9px] font-sans text-gray-700">
+                      Hotline:{" "}
+                      {storeSettings.hotlineNumber.trim() || "Not configured"}
                     </p>
+                    <p className="max-w-[190px] break-words text-[9px] font-sans text-gray-700">
+                      Email:{" "}
+                      {storeSettings.shopEmail.trim() || "Not configured"}
+                    </p>
+                    {storeSettings.storeAddress.trim() && (
+                      <p className="text-[8px] font-sans text-gray-600 max-w-[190px] leading-tight">
+                        {storeSettings.storeAddress}
+                      </p>
+                    )}
                   </div>
 
                   <div className="text-right">

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Product, OrderItem, OrderedProductSummary, CourierAssignment } from '../../types';
 import { BANGLADESH_DISTRICTS, isDhakaDistrict } from '../../data/districts';
 import {
-  X,
+  ArrowLeft,
   Plus,
   Trash2,
   Search,
@@ -21,8 +21,7 @@ import {
 } from 'lucide-react';
 
 interface AdminManualOrderModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+  onBack: () => void;
   products: Product[];
   onAddOrder: (newOrder: OrderItem) => void | Promise<OrderItem | null | void>;
   onOpenInvoice?: (order: OrderItem) => void;
@@ -38,8 +37,7 @@ interface ManualOrderItemLine {
 }
 
 export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
-  isOpen,
-  onClose,
+  onBack,
   products,
   onAddOrder,
   onOpenInvoice
@@ -74,8 +72,6 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [createdOrderSuccess, setCreatedOrderSuccess] = useState<OrderItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  if (!isOpen) return null;
 
   // Calculate default delivery charge based on zone
   const defaultDeliveryCharge =
@@ -279,16 +275,15 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs overflow-y-auto animate-in fade-in">
-      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-gray-200 overflow-hidden my-auto max-h-[92vh] flex flex-col font-sans">
-        {/* Modal Top Header */}
-        <div className="p-4 sm:p-5 bg-[#003828] text-white flex items-center justify-between shrink-0 shadow-md">
-          <div className="flex items-center gap-3">
+    <div className="w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col font-sans">
+        {/* Page Header */}
+        <div className="p-4 sm:p-5 bg-[#003828] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-[#00503a] border border-emerald-400/30 flex items-center justify-center text-white shadow-xs">
               <ShoppingBag className="w-5 h-5 text-[#9ef4d0]" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base sm:text-lg font-bold text-white font-montserrat">
                   Manual Order Entry
                 </h2>
@@ -296,24 +291,25 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                   Admin POS
                 </span>
               </div>
-              <p className="text-xs text-emerald-200">
+              <p className="text-xs text-emerald-200 break-words">
                 Create customer orders from Phone, Facebook, WhatsApp, or in-store walk-in
               </p>
             </div>
           </div>
 
           <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
-            title="Close"
+            onClick={onBack}
+            className="min-h-11 w-full sm:w-auto px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center gap-2 transition-colors cursor-pointer text-xs font-bold"
+            title="Back"
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back</span>
           </button>
         </div>
 
         {/* Successful Creation Notification Card */}
         {createdOrderSuccess ? (
-          <div className="p-6 sm:p-10 text-center space-y-6 overflow-y-auto flex-1 bg-gray-50/50">
+          <div className="p-4 sm:p-8 lg:p-10 text-center space-y-6 bg-gray-50/50">
             <div className="w-16 h-16 bg-emerald-100 text-[#00503a] rounded-full flex items-center justify-center mx-auto shadow-xs border-2 border-emerald-200">
               <CheckCircle2 className="w-9 h-9 text-[#006a4e]" />
             </div>
@@ -331,25 +327,25 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
             </div>
 
             {/* Order Details Brief Summary */}
-            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-gray-200 shadow-xs text-left text-xs space-y-2.5">
-              <div className="flex justify-between border-b border-gray-100 pb-2">
+            <div className="max-w-md mx-auto bg-white p-4 sm:p-5 rounded-2xl border border-gray-200 shadow-xs text-left text-xs space-y-2.5">
+              <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 border-b border-gray-100 pb-2">
                 <span className="text-gray-500 font-semibold">Customer Name:</span>
                 <span className="font-bold text-gray-900">{createdOrderSuccess.customerName}</span>
               </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
+              <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 border-b border-gray-100 pb-2">
                 <span className="text-gray-500 font-semibold">Phone:</span>
                 <span className="font-bold font-mono text-gray-900">{createdOrderSuccess.phone}</span>
               </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
+              <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 border-b border-gray-100 pb-2">
                 <span className="text-gray-500 font-semibold">Items:</span>
                 <span className="font-medium text-gray-800 line-clamp-1">{createdOrderSuccess.items}</span>
               </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
+              <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 border-b border-gray-100 pb-2">
                 <span className="text-gray-500 font-semibold">Total Amount:</span>
                 <span className="font-extrabold text-sm text-[#00503a] font-montserrat">{createdOrderSuccess.total.toLocaleString()} tk</span>
               </div>
               {createdOrderSuccess.courier && (
-                <div className="flex justify-between text-emerald-800 font-semibold">
+                <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-emerald-800 font-semibold">
                   <span>Courier Tracking:</span>
                   <span>{createdOrderSuccess.courier.partner} ({createdOrderSuccess.courier.trackingId})</span>
                 </div>
@@ -372,9 +368,9 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                 <button
                   onClick={() => {
                     onOpenInvoice(createdOrderSuccess);
-                    onClose();
+                    onBack();
                   }}
-                  className="flex items-center gap-2 bg-[#00503a] hover:bg-[#003828] text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                    className="min-h-11 flex items-center gap-2 bg-[#00503a] hover:bg-[#003828] text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-xs cursor-pointer"
                 >
                   <FileText className="w-4 h-4 text-[#9ef4d0]" />
                   <span>Print Packing Invoice</span>
@@ -383,15 +379,15 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
 
               <button
                 onClick={handleResetForNew}
-                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2.5 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                className="min-h-11 flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2.5 rounded-xl font-bold text-xs transition-colors cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Create Another Order</span>
               </button>
 
               <button
-                onClick={onClose}
-                className="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 font-bold text-xs transition-colors cursor-pointer"
+                onClick={onBack}
+                className="min-h-11 px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 font-bold text-xs transition-colors cursor-pointer"
               >
                 Done & Close
               </button>
@@ -399,7 +395,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
           </div>
         ) : (
           /* Main Order Entry Form */
-          <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-6">
+          <form onSubmit={handleSubmit} className="p-3 sm:p-5 lg:p-6 space-y-4 sm:space-y-6">
             {/* Grid 1: Customer Info & Delivery Details */}
             <div className="bg-gray-50/80 p-4 sm:p-5 rounded-2xl border border-gray-200/80 space-y-4">
               <div className="flex items-center gap-2 text-[#003828] font-bold text-sm border-b border-gray-200 pb-2">
@@ -407,7 +403,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                 <span>1. Customer Details & Delivery Address</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Customer Name */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">
@@ -419,7 +415,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="e.g. Tanvir Ahmed / Tahmina Begum"
-                    className={`w-full px-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border ${
+                    className={`min-h-11 w-full px-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border ${
                       errors.customerName ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'
                     } focus:outline-none focus:ring-2 focus:ring-[#00503a]`}
                   />
@@ -441,7 +437,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="017XXXXXXXX"
-                      className={`w-full pl-9 pr-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border ${
+                      className={`min-h-11 w-full pl-9 pr-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border ${
                         errors.phone ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'
                       } focus:outline-none focus:ring-2 focus:ring-[#00503a] font-mono`}
                     />
@@ -459,7 +455,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="customer@gmail.com"
-                    className="w-full px-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00503a]"
+                    className="min-h-11 w-full px-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00503a]"
                   />
                 </div>
 
@@ -480,7 +476,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                       }
                       setCustomDeliveryCharge(null);
                     }}
-                    className="w-full px-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00503a]"
+                    className="min-h-11 w-full px-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00503a]"
                   >
                     {BANGLADESH_DISTRICTS.map((dist) => (
                       <option key={dist.id} value={dist.id}>
@@ -491,7 +487,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                 </div>
 
                 {/* Full Address */}
-                <div className="sm:col-span-2">
+                <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-gray-700 mb-1">
                     Full Delivery Address <span className="text-red-500">*</span>
                   </label>
@@ -503,7 +499,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
                       placeholder="House/Holding no, Road no, Area, Thana, Landmark..."
-                      className={`w-full pl-9 pr-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border ${
+                      className={`min-h-11 w-full pl-9 pr-3.5 py-2 rounded-xl text-xs sm:text-sm bg-white border ${
                         errors.address ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'
                       } focus:outline-none focus:ring-2 focus:ring-[#00503a]`}
                     />
@@ -514,18 +510,18 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                 </div>
 
                 {/* Delivery Zone Selector */}
-                <div className="sm:col-span-2 space-y-1.5">
+                <div className="md:col-span-2 space-y-1.5">
                   <label className="block text-xs font-bold text-gray-700">
                     Delivery Zone & Fee
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setDeliveryZone('inside_dhaka');
                         setCustomDeliveryCharge(null);
                       }}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                      className={`min-h-11 p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
                         deliveryZone === 'inside_dhaka' && customDeliveryCharge === null
                           ? 'border-[#00503a] bg-[#e7f6f0] text-[#00503a]'
                           : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -541,7 +537,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                         setDeliveryZone('sub_dhaka');
                         setCustomDeliveryCharge(null);
                       }}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                      className={`min-h-11 p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
                         deliveryZone === 'sub_dhaka' && customDeliveryCharge === null
                           ? 'border-[#00503a] bg-[#e7f6f0] text-[#00503a]'
                           : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -557,7 +553,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                         setDeliveryZone('outside_dhaka');
                         setCustomDeliveryCharge(null);
                       }}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                      className={`min-h-11 p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
                         deliveryZone === 'outside_dhaka' && customDeliveryCharge === null
                           ? 'border-[#00503a] bg-[#e7f6f0] text-[#00503a]'
                           : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -605,7 +601,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                     }}
                     onFocus={() => setIsProductDropdownOpen(true)}
                     placeholder="Search by product name, SKU, or category..."
-                    className="w-full pl-9 pr-4 py-2 rounded-xl text-xs sm:text-sm bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#00503a]"
+                    className="min-h-11 w-full pl-9 pr-4 py-2 rounded-xl text-xs sm:text-sm bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#00503a]"
                   />
                 </div>
 
@@ -664,7 +660,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
               {/* Selected Items List */}
               {selectedItems.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
-                  <div className="p-2.5 bg-gray-50 grid grid-cols-12 text-[11px] font-bold text-gray-500 uppercase">
+                  <div className="hidden md:grid md:grid-cols-12 p-2.5 bg-gray-50 text-[11px] font-bold text-gray-500 uppercase">
                     <span className="col-span-6">Product</span>
                     <span className="col-span-2 text-center">Unit Price</span>
                     <span className="col-span-2 text-center">Qty</span>
@@ -674,10 +670,10 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                   {selectedItems.map((item, index) => (
                     <div
                       key={index}
-                      className="p-3 grid grid-cols-12 items-center gap-2 text-xs"
+                      className="p-3 grid grid-cols-3 md:grid-cols-12 items-center gap-2 text-xs"
                     >
                       {/* Product Name & SKU */}
-                      <div className="col-span-6 flex items-center gap-2">
+                      <div className="col-span-3 md:col-span-6 flex items-center gap-2 min-w-0">
                         {item.image ? (
                           <img
                             src={item.image}
@@ -693,12 +689,13 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                           type="text"
                           value={item.name}
                           onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
-                          className="w-full px-2 py-1 text-xs font-semibold text-gray-900 border border-transparent hover:border-gray-200 focus:border-[#00503a] rounded"
+                          className="min-w-0 w-full px-2 py-2 text-xs font-semibold text-gray-900 border border-transparent hover:border-gray-200 focus:border-[#00503a] rounded"
                         />
                       </div>
 
                       {/* Unit Price */}
-                      <div className="col-span-2 text-center">
+                      <div className="col-span-1 md:col-span-2 text-left md:text-center">
+                        <span className="block md:hidden text-[10px] text-gray-500 mb-1">Unit Price</span>
                         <div className="flex items-center justify-center">
                           <input
                             type="number"
@@ -707,24 +704,26 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                             onChange={(e) =>
                               handleUpdateItem(index, 'price', Number(e.target.value))
                             }
-                            className="w-16 px-1.5 py-1 text-center font-bold font-montserrat text-xs border border-gray-200 rounded focus:border-[#00503a]"
+                            className="min-h-10 w-11 sm:w-16 px-1.5 py-1 text-center font-bold font-montserrat text-xs border border-gray-200 rounded focus:border-[#00503a]"
                           />
                           <span className="text-gray-400 text-xs ml-0.5">tk</span>
                         </div>
                       </div>
 
                       {/* Quantity Selector */}
-                      <div className="col-span-2 flex items-center justify-center gap-1">
+                      <div className="col-span-2 md:col-span-2">
+                        <span className="block md:hidden text-[10px] text-gray-500 mb-1 text-center">Quantity</span>
+                        <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
                           onClick={() =>
                             handleUpdateItem(index, 'quantity', Math.max(1, item.quantity - 1))
                           }
-                          className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center cursor-pointer"
+                          className="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center cursor-pointer"
                         >
                           -
                         </button>
-                        <span className="w-6 text-center font-mono font-bold">
+                        <span className="min-w-6 text-center font-mono font-bold">
                           {item.quantity}
                         </span>
                         <button
@@ -732,21 +731,23 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                           onClick={() =>
                             handleUpdateItem(index, 'quantity', item.quantity + 1)
                           }
-                          className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center cursor-pointer"
+                          className="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center cursor-pointer"
                         >
                           +
                         </button>
+                        </div>
                       </div>
 
                       {/* Line Total & Remove */}
-                      <div className="col-span-2 flex items-center justify-end gap-2">
+                      <div className="col-span-3 md:col-span-2 flex items-center justify-between md:justify-end gap-2 border-t border-gray-100 pt-2 md:border-0 md:pt-0">
+                        <span className="md:hidden text-[10px] text-gray-500">Total</span>
                         <span className="font-montserrat font-bold text-gray-900">
                           {(item.price * item.quantity).toLocaleString()} tk
                         </span>
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(index)}
-                          className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                          className="min-h-10 min-w-10 p-2 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                           title="Remove"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -772,11 +773,11 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">
                     Payment Method
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('cod')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
+                      className={`min-h-11 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
                         paymentMethod === 'cod'
                           ? 'border-[#00503a] bg-[#e7f6f0] text-[#00503a]'
                           : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -787,7 +788,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('bkash')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
+                      className={`min-h-11 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
                         paymentMethod === 'bkash'
                           ? 'border-pink-600 bg-pink-50 text-pink-700'
                           : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -798,7 +799,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('nagad')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
+                      className={`min-h-11 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
                         paymentMethod === 'nagad'
                           ? 'border-orange-600 bg-orange-50 text-orange-700'
                           : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -817,7 +818,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                   <select
                     value={orderStatus}
                     onChange={(e) => setOrderStatus(e.target.value as OrderItem['status'])}
-                    className="w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-gray-200 font-bold focus:ring-2 focus:ring-[#00503a]"
+                    className="min-h-11 w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-gray-200 font-bold focus:ring-2 focus:ring-[#00503a]"
                   >
                     <option value="pending">Pending</option>
                     <option value="processing">Processing / Confirmed</option>
@@ -843,7 +844,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
 
                   {assignCourierNow && (
                     <div className="p-3 bg-white rounded-xl border border-emerald-200 space-y-2.5 animate-in fade-in">
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <label className="block text-[11px] font-bold text-gray-600 mb-1">
                             Courier Partner:
@@ -853,7 +854,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                             onChange={(e) =>
                               setCourierPartner(e.target.value as 'Pathao' | 'RedX' | 'Steadfast' | 'Paperfly')
                             }
-                            className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-gray-50 border border-gray-200 font-semibold"
+                            className="min-h-11 w-full px-2.5 py-1.5 rounded-lg text-xs bg-gray-50 border border-gray-200 font-semibold"
                           >
                             <option value="Pathao">Pathao Courier</option>
                             <option value="Steadfast">Steadfast Courier</option>
@@ -871,7 +872,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                             value={customTrackingId}
                             onChange={(e) => setCustomTrackingId(e.target.value)}
                             placeholder="Auto generated if blank"
-                            className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-gray-50 border border-gray-200 font-mono"
+                            className="min-h-11 w-full px-2.5 py-1.5 rounded-lg text-xs bg-gray-50 border border-gray-200 font-mono"
                           />
                         </div>
                       </div>
@@ -889,7 +890,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                     value={orderNote}
                     onChange={(e) => setOrderNote(e.target.value)}
                     placeholder="e.g. Call before delivery / Customer requested fast shipment..."
-                    className="w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-gray-200 focus:ring-2 focus:ring-[#00503a]"
+                    className="min-h-16 w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-gray-200 focus:ring-2 focus:ring-[#00503a]"
                   />
                 </div>
               </div>
@@ -903,7 +904,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
 
                 <div className="space-y-3 text-xs">
                   {/* Subtotal */}
-                  <div className="flex justify-between items-center text-gray-600 font-semibold">
+                  <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-1 text-gray-600 font-semibold">
                     <span>Products Subtotal ({selectedItems.reduce((acc, i) => acc + i.quantity, 0)} items):</span>
                     <span className="font-montserrat text-sm text-gray-900 font-bold">
                       {subtotal.toLocaleString()} tk
@@ -911,7 +912,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                   </div>
 
                   {/* Delivery Fee Input */}
-                  <div className="flex justify-between items-center text-gray-600 font-semibold">
+                  <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-1 text-gray-600 font-semibold">
                     <span>Delivery Charge:</span>
                     <div className="flex items-center gap-1">
                       <input
@@ -919,14 +920,14 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                         min="0"
                         value={activeDeliveryCharge}
                         onChange={(e) => setCustomDeliveryCharge(Number(e.target.value))}
-                        className="w-20 px-2 py-1 text-right font-montserrat font-bold text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#00503a]"
+                        className="min-h-10 w-20 px-2 py-1 text-right font-montserrat font-bold text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#00503a]"
                       />
                       <span className="text-gray-400 text-xs">tk</span>
                     </div>
                   </div>
 
                   {/* Discount Input */}
-                  <div className="flex justify-between items-center text-gray-600 font-semibold">
+                  <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-1 text-gray-600 font-semibold">
                     <span>Special Discount:</span>
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400">-</span>
@@ -935,14 +936,14 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                         min="0"
                         value={discount}
                         onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
-                        className="w-20 px-2 py-1 text-right font-montserrat font-bold text-xs bg-gray-50 border border-gray-200 rounded-lg text-red-600 focus:bg-white focus:border-[#00503a]"
+                        className="min-h-10 w-20 px-2 py-1 text-right font-montserrat font-bold text-xs bg-gray-50 border border-gray-200 rounded-lg text-red-600 focus:bg-white focus:border-[#00503a]"
                       />
                       <span className="text-gray-400 text-xs">tk</span>
                     </div>
                   </div>
 
                   {/* Advance Paid Input */}
-                  <div className="flex justify-between items-center text-gray-600 font-semibold">
+                  <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-1 text-gray-600 font-semibold">
                     <span>Advance Payment (if any):</span>
                     <div className="flex items-center gap-1">
                       <input
@@ -950,7 +951,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                         min="0"
                         value={advancePaid}
                         onChange={(e) => setAdvancePaid(Math.max(0, Number(e.target.value)))}
-                        className="w-20 px-2 py-1 text-right font-montserrat font-bold text-xs bg-gray-50 border border-gray-200 rounded-lg text-emerald-700 focus:bg-white focus:border-[#00503a]"
+                        className="min-h-10 w-20 px-2 py-1 text-right font-montserrat font-bold text-xs bg-gray-50 border border-gray-200 rounded-lg text-emerald-700 focus:bg-white focus:border-[#00503a]"
                       />
                       <span className="text-gray-400 text-xs">tk</span>
                     </div>
@@ -958,7 +959,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
 
                   {/* Divider */}
                   <div className="border-t-2 border-dashed border-gray-200 pt-3 space-y-2">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                       <span className="font-bold text-sm text-gray-900">Total Invoice Amount:</span>
                       <span className="font-montserrat font-extrabold text-lg text-[#00503a]">
                         {totalAmount.toLocaleString()} tk
@@ -966,7 +967,7 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                     </div>
 
                     {advancePaid > 0 && (
-                      <div className="flex justify-between items-center bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                      <div className="flex flex-wrap justify-between items-center gap-2 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
                         <span className="font-bold text-xs text-amber-900">
                           Due on Delivery:
                         </span>
@@ -980,26 +981,26 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
               </div>
             </div>
 
-            {/* Modal Bottom Actions */}
-            <div className="pt-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+            {/* Order Actions */}
+            <div className="pt-4 border-t border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div className="text-xs text-gray-500 flex items-center gap-1.5">
                 <Truck className="w-4 h-4 text-[#00503a]" />
                 <span>Orders will sync immediately to live store and inventory</span>
               </div>
 
-              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <div className="flex flex-col md:flex-row gap-2.5 w-full md:w-auto">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 font-bold text-xs transition-colors cursor-pointer"
+                  onClick={onBack}
+                  className="min-h-11 w-full md:w-auto px-5 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 font-bold text-xs transition-colors cursor-pointer"
                 >
-                  Cancel
+                  Back
                 </button>
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#00503a] hover:bg-[#003828] text-white px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md active:scale-98 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="min-h-11 w-full md:w-auto flex items-center justify-center gap-2 bg-[#00503a] hover:bg-[#003828] text-white px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md active:scale-98 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-4 h-4 text-[#9ef4d0]" />
                   <span>{isSubmitting ? 'Saving order…' : 'Confirm & Create Order'}</span>
@@ -1008,7 +1009,6 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
             </div>
           </form>
         )}
-      </div>
     </div>
   );
 };

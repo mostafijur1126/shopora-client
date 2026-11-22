@@ -193,7 +193,7 @@ interface AdminScreenProps {
   onUpdateReview: (review: ReviewScreenshot) => Promise<unknown>;
   onDeleteReview: (reviewId: string) => Promise<unknown>;
   onAddOrder?: (newOrder: OrderItem) => void;
-  onUpdateOrder?: (updatedOrder: OrderItem) => void;
+  onUpdateOrder?: (updatedOrder: OrderItem) => void | Promise<unknown>;
   onUpdateOrderStatus?: (orderId: string, status: OrderItem["status"]) => void;
   onReviewPayment?: (
     orderId: string,

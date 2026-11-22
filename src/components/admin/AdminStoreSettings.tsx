@@ -32,6 +32,8 @@ export const AdminStoreSettings: React.FC = () => {
     return initialStoreSettings;
   });
   const [contactSettings, setContactSettings] = useState<StoreContactSettings>({
+    shopName: "",
+    shopEmail: "",
     hotlineNumber: "",
     whatsappNumber: "",
     storeAddress: "",
@@ -87,10 +89,19 @@ export const AdminStoreSettings: React.FC = () => {
     setContactError(null);
     try {
       const saved = await fetchStoreContactSettingsApi();
-      const normalized = { ...saved, nagadNumber: saved.nagadNumber || "" };
+      const normalized = {
+        ...saved,
+        shopName: saved.shopName || "",
+        shopEmail: saved.shopEmail || "",
+        nagadNumber: saved.nagadNumber || "",
+      };
       setContactSettings(normalized);
       setSettings((current) => ({
         ...current,
+        shopName: normalized.shopName,
+        supportPhone: normalized.hotlineNumber,
+        supportEmail: normalized.shopEmail,
+        storeAddress: normalized.storeAddress,
         bkashMerchant: normalized.bkashNumber,
         nagadMerchant: normalized.nagadNumber,
       }));
@@ -119,23 +130,28 @@ export const AdminStoreSettings: React.FC = () => {
     setIsSavingSettings(true);
     setContactError(null);
     try {
+      const savedContactSettings =
+        await updateStoreContactSettingsApi(contactSettings);
+      const normalized = {
+        ...savedContactSettings,
+        shopName: savedContactSettings.shopName || "",
+        shopEmail: savedContactSettings.shopEmail || "",
+        nagadNumber: savedContactSettings.nagadNumber || "",
+      };
+      setContactSettings(normalized);
       localStorage.setItem(
         "amarshop_store_settings",
         JSON.stringify({
           ...settings,
-          supportPhone: contactSettings.hotlineNumber,
-          supportWhatsapp: contactSettings.whatsappNumber,
-          storeAddress: contactSettings.storeAddress,
-          bkashMerchant: contactSettings.bkashNumber,
-          nagadMerchant: contactSettings.nagadNumber,
+          shopName: normalized.shopName,
+          supportPhone: normalized.hotlineNumber,
+          supportEmail: normalized.shopEmail,
+          supportWhatsapp: normalized.whatsappNumber,
+          storeAddress: normalized.storeAddress,
+          bkashMerchant: normalized.bkashNumber,
+          nagadMerchant: normalized.nagadNumber,
         }),
       );
-      const savedContactSettings =
-        await updateStoreContactSettingsApi(contactSettings);
-      setContactSettings({
-        ...savedContactSettings,
-        nagadNumber: savedContactSettings.nagadNumber || "",
-      });
       showFeedback("Store settings saved successfully!");
     } catch (error) {
       setContactError(
@@ -474,7 +490,7 @@ export const AdminStoreSettings: React.FC = () => {
                   Customer Support Channels
                 </h3>
                 <p className="text-[11px] text-gray-500">
-                  Hotline, Official WhatsApp & Store physical address
+                  Shop name, email, hotline, WhatsApp & physical address
                 </p>
               </div>
             </div>
@@ -482,7 +498,47 @@ export const AdminStoreSettings: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
                 <label className="block font-bold text-gray-700 mb-1">
-                  Hotline Phone Number
+                  Shop Name
+                </label>
+                <input
+                  type="text"
+                  maxLength={150}
+                  value={contactSettings.shopName}
+                  onChange={(e) =>
+                    setContactSettings({
+                      ...contactSettings,
+                      shopName: e.target.value,
+                    })
+                  }
+                  disabled={isContactLoading || isSavingSettings}
+                  placeholder="Your shop name"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00503a] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Shop Email
+                </label>
+                <input
+                  type="email"
+                  maxLength={254}
+                  value={contactSettings.shopEmail}
+                  onChange={(e) =>
+                    setContactSettings({
+                      ...contactSettings,
+                      shopEmail: e.target.value,
+                    })
+                  }
+                  disabled={isContactLoading || isSavingSettings}
+                  placeholder="shop@example.com"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00503a] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Hotline Number
                 </label>
                 <input
                   type="tel"

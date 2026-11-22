@@ -313,7 +313,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 className="w-full h-12 bg-[#00503a] hover:bg-[#003828] text-white rounded-xl text-sm sm:text-base font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer active:scale-[0.98]"
               >
                 <PackageCheck className="w-5 h-5 text-[#9ef4d0]" />
-                <span>Order Now</span>
+                <span>Checkout</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}

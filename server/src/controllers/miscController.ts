@@ -265,6 +265,8 @@ export const getStockNotifyRequests = asyncHandler(async (_req: AuthRequest, res
 
 const STORE_CONTACT_SETTINGS_KEY = 'store-contact';
 const EMPTY_STORE_CONTACT_SETTINGS = {
+  shopName: '',
+  shopEmail: '',
   hotlineNumber: '',
   whatsappNumber: '',
   storeAddress: '',
@@ -281,6 +283,8 @@ const contactPhoneSchema = z
   .refine((value) => value.replace(/\D/g, '').length >= 7);
 
 const storeContactSettingsSchema = z.object({
+  shopName: z.string().trim().max(150).default(''),
+  shopEmail: z.string().trim().max(254).email().or(z.literal('')).default(''),
   hotlineNumber: contactPhoneSchema,
   whatsappNumber: contactPhoneSchema,
   storeAddress: z.string().trim().min(1).max(500),
@@ -310,13 +314,17 @@ export const getStoreContactSettings = asyncHandler(
     const storedSettings = await StoreContactSettings.findOne({
       key: STORE_CONTACT_SETTINGS_KEY,
     })
-      .select('hotlineNumber whatsappNumber storeAddress bkashNumber nagadNumber')
+      .select(
+        'shopName shopEmail hotlineNumber whatsappNumber storeAddress bkashNumber nagadNumber',
+      )
       .lean();
 
     res.json({
       success: true,
       settings: storedSettings
         ? {
+            shopName: storedSettings.shopName || '',
+            shopEmail: storedSettings.shopEmail || '',
             hotlineNumber: storedSettings.hotlineNumber,
             whatsappNumber: storedSettings.whatsappNumber,
             storeAddress: storedSettings.storeAddress,
@@ -350,6 +358,8 @@ export const updateStoreContactSettings = asyncHandler(
     res.json({
       success: true,
       settings: {
+        shopName: settings.shopName || '',
+        shopEmail: settings.shopEmail || '',
         hotlineNumber: settings.hotlineNumber,
         whatsappNumber: settings.whatsappNumber,
         storeAddress: settings.storeAddress,

@@ -213,8 +213,9 @@ export default function App() {
     const savedScreen = localStorage.getItem("shopora_active_screen");
     return (savedScreen as ActiveScreen) || "home";
   });
+  const productReturnScreenRef = useRef<ActiveScreen>("home");
 
-  // Direct Order Modal state (single product or full cart checkout)
+  // Checkout state distinguishes a selected Buy Now item from cart checkout.
   const [directOrderData, setDirectOrderData] = useState<{
     isOpen: boolean;
     fromCart?: boolean;
@@ -486,13 +487,6 @@ export default function App() {
           return;
         }
 
-        const categorySlug = urlParams.get("category");
-        if (pageParam === "categories" || categorySlug) {
-          setSelectedCategoryFilter(categorySlug);
-          setActiveScreen("categories");
-          return;
-        }
-
         const productId =
           urlParams.get("product") || hash.replace("#product-", "");
         if (productId && productId !== "admin") {
@@ -507,7 +501,17 @@ export default function App() {
           return;
         }
 
-        if (isPopState && activeScreen === "categories") {
+        const categorySlug = urlParams.get("category");
+        if (pageParam === "categories" || categorySlug) {
+          setSelectedCategoryFilter(categorySlug);
+          setActiveScreen("categories");
+          return;
+        }
+
+        if (
+          isPopState &&
+          (activeScreen === "categories" || activeScreen === "product-detail")
+        ) {
           setSelectedCategoryFilter(null);
           setActiveScreen("home");
         }
@@ -530,12 +534,47 @@ export default function App() {
   // ---------------- Storefront handlers ----------------
 
   const handleOpenProductDetail = (product: Product) => {
+    if (activeScreen !== "product-detail") {
+      productReturnScreenRef.current = activeScreen;
+    }
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.delete("page");
+      params.delete("screen");
+      params.delete("tab");
+      params.delete("category");
+      params.delete("admin");
+      params.set("product", product.id);
+      window.history.pushState(
+        { shoporaProductDetail: true },
+        "",
+        `${window.location.pathname}?${params.toString()}`,
+      );
+    } catch (error) {
+      console.error("Could not update product URL", error);
+    }
+
     setSelectedProduct(product);
     setRecentlyViewedIds((prev) =>
       [product.id, ...prev.filter((id) => id !== product.id)].slice(0, 10),
     );
     setActiveScreen("product-detail");
     scrollToTop();
+  };
+
+  const handleBackFromProductDetail = () => {
+    const historyState = window.history.state;
+    if (
+      historyState &&
+      typeof historyState === "object" &&
+      historyState.shoporaProductDetail === true
+    ) {
+      window.history.back();
+      return;
+    }
+
+    handleNavigate(productReturnScreenRef.current);
   };
 
   const handleToggleWishlist = (productId: string) => {
@@ -615,7 +654,12 @@ export default function App() {
       showToast("আপনার কার্ট খালি!");
       return;
     }
-    setDirectOrderData({ isOpen: true, fromCart: true, cartItems: cart });
+    setDirectOrderData({ isOpen: true, fromCart: true });
+  };
+
+  const handleBackToCart = () => {
+    setDirectOrderData({ isOpen: false });
+    setIsCartOpen(true);
   };
 
   const handleRemoveCartItem = (lineKey: string) => {
@@ -826,6 +870,7 @@ export default function App() {
       showToast(`অর্ডার #${updatedOrder.id} সফলভাবে আপডেট করা হয়েছে`);
     } catch (err) {
       showApiError(err, "অর্ডার আপডেট করা যায়নি");
+      throw err;
     }
   };
 
@@ -1249,6 +1294,15 @@ export default function App() {
     );
   }
 
+  const isFullPageDirectOrder =
+    activeScreen === "product-detail" &&
+    directOrderData.isOpen &&
+    !directOrderData.fromCart;
+  const isFullPageCartCheckout =
+    directOrderData.isOpen && directOrderData.fromCart === true;
+  const isFullPageCheckout =
+    isFullPageDirectOrder || isFullPageCartCheckout;
+
   return (
     <div className="min-h-screen flex flex-col bg-[#f8f9fa] text-[#191c1d] selection:bg-[#00503a] selection:text-white">
       {/* Top Navbar (customer-facing screens only) */}
@@ -1276,7 +1330,7 @@ export default function App() {
       )}
 
       {/* Main content */}
-      <div className="flex-1">
+      <div className={`flex-1 ${isFullPageCartCheckout ? "hidden" : ""}`}>
         {activeScreen === "home" && (
           <HomeScreen
             products={products}
@@ -1304,22 +1358,43 @@ export default function App() {
         )}
 
         {activeScreen === "product-detail" && selectedProduct && (
-          <ProductDetailScreen
-            product={selectedProduct}
-            allProducts={products}
-            wishlist={wishlist}
-            recentlyViewedIds={recentlyViewedIds}
-            onToggleWishlist={handleToggleWishlist}
-            onAddToCart={handleAddToCart}
-            onDirectOrder={handleOpenDirectOrder}
-            onSelectProduct={handleOpenProductDetail}
-            onNotifyStockRequest={handleNotifyStockRequest}
-            canDeleteReviews={Boolean(getToken())}
-            onDeleteReview={handleDeleteReview}
-            onReviewAdded={handleReviewAdded}
-            onReviewStatsChange={handleReviewStatsChange}
-            onBack={() => setActiveScreen("home")}
-          />
+          <>
+            <div className={isFullPageDirectOrder ? "hidden" : undefined}>
+              <ProductDetailScreen
+                product={selectedProduct}
+                allProducts={products}
+                wishlist={wishlist}
+                recentlyViewedIds={recentlyViewedIds}
+                onToggleWishlist={handleToggleWishlist}
+                onAddToCart={handleAddToCart}
+                onDirectOrder={handleOpenDirectOrder}
+                onSelectProduct={handleOpenProductDetail}
+                onNotifyStockRequest={handleNotifyStockRequest}
+                canDeleteReviews={Boolean(getToken())}
+                onDeleteReview={handleDeleteReview}
+                onReviewAdded={handleReviewAdded}
+                onReviewStatsChange={handleReviewStatsChange}
+                onBack={handleBackFromProductDetail}
+              />
+            </div>
+            {isFullPageDirectOrder && (
+              <Suspense
+                fallback={<CheckoutSkeleton fullPage />}
+              >
+                <DirectOrderModal
+                  isOpen={directOrderData.isOpen}
+                  fullPage
+                  onClose={() => setDirectOrderData({ isOpen: false })}
+                  product={directOrderData.product}
+                  quantity={directOrderData.quantity || 1}
+                  cartItems={directOrderData.cartItems}
+                  onPlaceOrder={handlePlaceOrder}
+                  customerProfile={customerProfile ?? guestData.profile}
+                  onCustomerInfoChange={handleCustomerInfoChange}
+                />
+              </Suspense>
+            )}
+          </>
         )}
 
         {activeScreen === "admin" && (
@@ -1366,8 +1441,26 @@ export default function App() {
         )}
       </div>
 
+      {isFullPageCartCheckout && (
+        <div className="flex-1">
+          <Suspense fallback={<CheckoutSkeleton fullPage />}>
+            <DirectOrderModal
+              isOpen={directOrderData.isOpen}
+              fullPage
+              backLabel="Back to Cart"
+              onClose={handleBackToCart}
+              cartItems={cart}
+              onCartItemsChange={setCart}
+              onPlaceOrder={handlePlaceOrder}
+              customerProfile={customerProfile ?? guestData.profile}
+              onCustomerInfoChange={handleCustomerInfoChange}
+            />
+          </Suspense>
+        </div>
+      )}
+
       {/* Review slider & footer (customer screens only) */}
-      {activeScreen !== "admin" && (
+      {activeScreen !== "admin" && !isFullPageCheckout && (
         <>
           <CustomerReviewSlider
             reviews={reviews}
@@ -1395,7 +1488,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {directOrderData.isOpen && (
+      {directOrderData.isOpen && !isFullPageCheckout && (
         <Suspense fallback={<CheckoutSkeleton />}>
           <DirectOrderModal
             isOpen={directOrderData.isOpen}
@@ -1419,7 +1512,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {!isCartOpen && activeScreen !== "admin" && (
+      {!isCartOpen && activeScreen !== "admin" && !isFullPageCheckout && (
         <FloatingCartButton
           cart={cart}
           onOpenCart={() => setIsCartOpen(true)}

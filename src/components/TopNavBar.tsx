@@ -89,7 +89,7 @@ const ANNOUNCEMENTS = [
 const PHONE_NUMBER = "01700-000000";
 
 // Same width rules as the rest of the site so everything lines up
-const CONTAINER = "w-full lg:w-[90%] mx-auto px-4 md:px-8";
+const CONTAINER = "w-full lg:w-[90%] mx-auto px-3 sm:px-4 md:px-8";
 
 interface TopNavBarProps {
   activeScreen: ActiveScreen;
@@ -350,13 +350,13 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
       {/* 2. Sticky header */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-xs">
         {/* Main row */}
-        <div className={`${CONTAINER} h-16 flex items-center gap-2 sm:gap-4`}>
+        <div className={`${CONTAINER} h-16 flex items-center gap-1 sm:gap-4`}>
           {/* Hamburger (mobile / tablet) */}
           <button
             id="mobile-menu-toggle-btn"
             onClick={() => setMobileMenuOpen(true)}
             aria-label="Open menu"
-            className="lg:hidden -ml-2 w-10 h-10 rounded-xl flex items-center justify-center text-gray-700 hover:text-[#00503a] hover:bg-gray-100 transition-colors cursor-pointer shrink-0"
+            className="lg:hidden -ml-1 w-9 h-10 rounded-xl flex items-center justify-center text-gray-700 hover:text-[#00503a] hover:bg-gray-100 transition-colors cursor-pointer shrink-0 sm:-ml-2 sm:w-10"
           >
             <Menu className="w-6 h-6" />
           </button>
@@ -366,9 +366,9 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             id="brand-logo-btn"
             onClick={() => go("home")}
             aria-label="Shopora home"
-            className="flex items-center gap-2.5 shrink-0 text-left cursor-pointer group focus:outline-none"
+            className="flex items-center gap-2 shrink-0 text-left cursor-pointer group focus:outline-none sm:gap-2.5"
           >
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl overflow-hidden shadow-sm group-hover:scale-105 transition-transform duration-300">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden shadow-sm group-hover:scale-105 transition-transform duration-300">
               <img
                 src={shoporaLogo}
                 alt="Shopora Logo"
@@ -376,7 +376,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               />
             </div>
             <div className="leading-none">
-              <span className="block text-xl sm:text-2xl font-black tracking-tight font-montserrat bg-gradient-to-r from-[#003828] via-[#00503a] to-[#007b58] bg-clip-text text-transparent">
+              <span className="block text-lg sm:text-2xl font-black tracking-tight font-montserrat bg-gradient-to-r from-[#003828] via-[#00503a] to-[#007b58] bg-clip-text text-transparent">
                 Shopora
               </span>
               <span className="hidden sm:block text-[11px] text-[#006a4e] font-semibold tracking-wider font-bengali mt-1">
@@ -394,13 +394,13 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           </form>
 
           {/* Actions */}
-          <div className="ml-auto md:ml-0 flex items-center gap-1 sm:gap-2 shrink-0">
+          <div className="ml-auto md:ml-0 flex items-center gap-0 sm:gap-2 shrink-0">
             {/* Mobile search toggle */}
             <button
               onClick={() => setMobileSearchOpen((v) => !v)}
               aria-label="Toggle search"
               aria-expanded={mobileSearchOpen}
-              className={`md:hidden w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+              className={`md:hidden w-9 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer sm:w-10 ${
                 mobileSearchOpen
                   ? "bg-[#ecfdf5] text-[#00503a]"
                   : "text-gray-700 hover:bg-gray-100"
@@ -419,7 +419,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               onClick={onOpenCart}
               aria-label={`Open shopping bag, ${cartCount} items`}
               title="Shopping Bag"
-              className="relative w-10 h-10 rounded-xl flex items-center justify-center text-gray-700 hover:bg-gray-100 hover:text-[#00503a] transition-colors cursor-pointer"
+              className="relative w-9 h-10 rounded-xl flex items-center justify-center text-gray-700 hover:bg-gray-100 hover:text-[#00503a] transition-colors cursor-pointer sm:w-10"
             >
               <ShoppingCart className="w-5 h-5" />
               {cartCount > 0 && (
@@ -438,7 +438,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                 aria-haspopup="menu"
                 aria-expanded={userMenuOpen}
                 title="My Account"
-                className={`h-10 flex items-center gap-1 rounded-xl pl-1 pr-1 sm:pr-2 transition-colors cursor-pointer ${
+                className={`h-10 w-9 justify-center flex items-center gap-1 rounded-xl px-0 transition-colors cursor-pointer sm:w-auto sm:justify-start sm:pl-1 sm:pr-2 ${
                   userMenuOpen ? "bg-gray-100" : "hover:bg-gray-100"
                 }`}
               >

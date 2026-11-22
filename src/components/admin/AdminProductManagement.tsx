@@ -288,6 +288,20 @@ export const AdminProductManagement: React.FC<AdminProductManagementProps> = ({
     { key: "out_of_stock", label: "Out of stock" },
   ];
 
+  if (isFormOpen) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <AdminProductForm
+          product={editingProduct}
+          categories={categories}
+          existingProducts={products}
+          onSubmit={handleFormSubmit}
+          onBack={closeForm}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -530,15 +544,6 @@ export const AdminProductManagement: React.FC<AdminProductManagementProps> = ({
         </div>
       )}
 
-      {isFormOpen && (
-        <AdminProductForm
-          product={editingProduct}
-          categories={categories}
-          existingProducts={products}
-          onSubmit={handleFormSubmit}
-          onClose={closeForm}
-        />
-      )}
     </div>
   );
 };

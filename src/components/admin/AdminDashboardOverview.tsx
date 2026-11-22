@@ -49,7 +49,7 @@ interface AdminDashboardOverviewProps {
     tab: "products" | "orders" | "customers" | "staff" | "settings",
   ) => void;
   onAddOrder?: (newOrder: OrderItem) => void;
-  onUpdateOrder?: (updatedOrder: OrderItem) => void;
+  onUpdateOrder?: (updatedOrder: OrderItem) => void | Promise<unknown>;
   onUpdateOrderStatus?: (orderId: string, status: OrderItem["status"]) => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
@@ -169,6 +169,54 @@ export const AdminDashboardOverview: React.FC<AdminDashboardOverviewProps> = ({
     link.click();
     document.body.removeChild(link);
   };
+
+  if (selectedEditOrder) {
+    return (
+      <AdminEditOrderModal
+        order={selectedEditOrder}
+        onBack={() => setSelectedEditOrder(null)}
+        products={products}
+        onUpdateOrder={async (updatedOrder) => {
+          if (onUpdateOrder) await onUpdateOrder(updatedOrder);
+        }}
+      />
+    );
+  }
+
+  if (selectedViewOrder) {
+    return (
+      <AdminViewOrderModal
+        order={selectedViewOrder}
+        onBack={() => setSelectedViewOrder(null)}
+        onEditOrder={(orderToEdit) => {
+          setSelectedViewOrder(null);
+          setSelectedEditOrder(orderToEdit);
+        }}
+        onOpenInvoice={(orderToInvoice) => {
+          setSelectedViewOrder(null);
+          setSelectedInvoiceOrder(orderToInvoice);
+        }}
+        onUpdateStatus={(orderId, newStatus) => {
+          onUpdateOrderStatus?.(orderId, newStatus);
+          setSelectedViewOrder((prev) =>
+            prev && prev.id === orderId
+              ? { ...prev, status: newStatus }
+              : prev,
+          );
+        }}
+      />
+    );
+  }
+
+  if (isManualOrderOpen) {
+    return (
+      <AdminManualOrderModal
+        onBack={() => setIsManualOrderOpen(false)}
+        products={products}
+        onAddOrder={(newOrder) => onAddOrder?.(newOrder)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 antialiased font-sans">
@@ -497,52 +545,6 @@ export const AdminDashboardOverview: React.FC<AdminDashboardOverviewProps> = ({
           </div>
         </div>
       </div>
-
-      {isManualOrderOpen && (
-        <AdminManualOrderModal
-          isOpen={isManualOrderOpen}
-          onClose={() => setIsManualOrderOpen(false)}
-          products={products}
-          onAddOrder={(newOrder) => onAddOrder?.(newOrder)}
-        />
-      )}
-
-      {selectedViewOrder && (
-        <AdminViewOrderModal
-          order={selectedViewOrder}
-          isOpen
-          onClose={() => setSelectedViewOrder(null)}
-          onEditOrder={(orderToEdit) => {
-            setSelectedViewOrder(null);
-            setSelectedEditOrder(orderToEdit);
-          }}
-          onOpenInvoice={(orderToInvoice) => {
-            setSelectedViewOrder(null);
-            setSelectedInvoiceOrder(orderToInvoice);
-          }}
-          onUpdateStatus={(orderId, newStatus) => {
-            onUpdateOrderStatus?.(orderId, newStatus);
-            setSelectedViewOrder((prev) =>
-              prev && prev.id === orderId
-                ? { ...prev, status: newStatus }
-                : prev,
-            );
-          }}
-        />
-      )}
-
-      {selectedEditOrder && (
-        <AdminEditOrderModal
-          order={selectedEditOrder}
-          isOpen
-          onClose={() => setSelectedEditOrder(null)}
-          products={products}
-          onUpdateOrder={(updatedOrder) => {
-            onUpdateOrder?.(updatedOrder);
-            setSelectedEditOrder(null);
-          }}
-        />
-      )}
 
       {selectedInvoiceOrder && (
         <AdminTaxInvoiceModal

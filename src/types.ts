@@ -252,6 +252,7 @@ export interface StoreSettingsConfig {
   bkashMerchant: string;
   nagadMerchant: string;
   rocketNumber: string;
+  shopName?: string;
   supportPhone: string;
   supportWhatsapp: string;
   supportEmail: string;
@@ -264,6 +265,8 @@ export interface StoreSettingsConfig {
 }
 
 export interface StoreContactSettings {
+  shopName: string;
+  shopEmail: string;
   hotlineNumber: string;
   whatsappNumber: string;
   storeAddress: string;

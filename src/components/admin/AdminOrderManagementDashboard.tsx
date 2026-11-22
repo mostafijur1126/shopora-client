@@ -69,7 +69,7 @@ interface AdminOrderManagementDashboardProps {
   orders: OrderItem[];
   products: Product[];
   onAddOrder?: (order: OrderItem) => void;
-  onUpdateOrder?: (order: OrderItem) => void;
+  onUpdateOrder?: (order: OrderItem) => void | Promise<unknown>;
   onUpdateOrderStatus?: (
     id: string,
     status: OrderStatus,
@@ -513,7 +513,7 @@ export const AdminOrderManagementDashboard: React.FC<
   const [selectedBulkCourier, setSelectedBulkCourier] =
     useState<CourierPartner>("Steadfast");
 
-  // Modals
+  // Dialogs and edit-page state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<OrderItem | null>(null);
   const [viewingOrder, setViewingOrder] = useState<OrderItem | null>(null);
@@ -941,6 +941,76 @@ export const AdminOrderManagementDashboard: React.FC<
     }
     return Array.from({ length: count }, (_, i) => startPage + i);
   }, [totalPages, safePage]);
+
+  if (editingOrder) {
+    return (
+      <Suspense
+        fallback={
+          <div role="status" className="rounded-2xl bg-white p-6 text-sm text-gray-500">
+            Loading order editor...
+          </div>
+        }
+      >
+        <AdminEditOrderModal
+          order={editingOrder}
+          onBack={() => setEditingOrder(null)}
+          products={products}
+          onUpdateOrder={async (updated) => {
+            if (onUpdateOrder) await onUpdateOrder(updated);
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  if (isAddModalOpen) {
+    return (
+      <Suspense
+        fallback={
+          <div role="status" className="rounded-2xl bg-white p-6 text-sm text-gray-500">
+            Loading checkout...
+          </div>
+        }
+      >
+        <AdminManualOrderModal
+          onBack={() => setIsAddModalOpen(false)}
+          products={products}
+          onAddOrder={(newOrd) =>
+            onAddOrder ? onAddOrder(newOrd) : undefined
+          }
+          onOpenInvoice={(ord) => setInvoiceOrders([ord])}
+        />
+      </Suspense>
+    );
+  }
+
+  if (viewingOrder) {
+    return (
+      <Suspense
+        fallback={
+          <div role="status" className="rounded-2xl bg-white p-6 text-sm text-gray-500">
+            Loading order details...
+          </div>
+        }
+      >
+        <AdminViewOrderModal
+          order={viewingOrder}
+          onBack={() => setViewingOrder(null)}
+          onEditOrder={(order) => {
+            setViewingOrder(null);
+            setEditingOrder(order);
+          }}
+          onOpenInvoice={(order) => {
+            setViewingOrder(null);
+            setInvoiceOrders([order]);
+          }}
+          onUpdateStatus={handleStatusChange}
+          onReviewPayment={handleReviewPayment}
+          onRecordPayment={handleRecordPayment}
+        />
+      </Suspense>
+    );
+  }
 
   const hasSelection = selectedOrderIds.length > 0;
   const filtersActive =
@@ -1558,56 +1628,6 @@ export const AdminOrderManagementDashboard: React.FC<
             </div>
           </div>
         </div>
-      )}
-
-      {isAddModalOpen && (
-        <Suspense fallback={null}>
-          <AdminManualOrderModal
-            isOpen={isAddModalOpen}
-            onClose={() => setIsAddModalOpen(false)}
-            products={products}
-            onAddOrder={(newOrd) =>
-              onAddOrder ? onAddOrder(newOrd) : undefined
-            }
-            onOpenInvoice={(ord) => setInvoiceOrders([ord])}
-          />
-        </Suspense>
-      )}
-
-      {editingOrder && (
-        <Suspense fallback={null}>
-          <AdminEditOrderModal
-            order={editingOrder}
-            isOpen={!!editingOrder}
-            onClose={() => setEditingOrder(null)}
-            products={products}
-            onUpdateOrder={(updated) => {
-              if (onUpdateOrder) onUpdateOrder(updated);
-              setEditingOrder(null);
-            }}
-          />
-        </Suspense>
-      )}
-
-      {viewingOrder && (
-        <Suspense fallback={null}>
-          <AdminViewOrderModal
-            order={viewingOrder}
-            isOpen
-            onClose={() => setViewingOrder(null)}
-            onEditOrder={(order) => {
-              setViewingOrder(null);
-              setEditingOrder(order);
-            }}
-            onOpenInvoice={(order) => {
-              setViewingOrder(null);
-              setInvoiceOrders([order]);
-            }}
-            onUpdateStatus={handleStatusChange}
-            onReviewPayment={handleReviewPayment}
-            onRecordPayment={handleRecordPayment}
-          />
-        </Suspense>
       )}
 
       {invoiceOrders && invoiceOrders.length > 0 && (
