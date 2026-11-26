@@ -11,7 +11,12 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { formatPrice } from "../utils/format";
-import { getCartLineKey } from "../utils/cart";
+import {
+  getCartItemPrice,
+  getCartItemVariant,
+  getCartItemStockQty,
+  getCartLineKey,
+} from "../utils/cart";
 
 const WhatsAppIcon: React.FC<{ className?: string }> = ({
   className = "w-5 h-5",
@@ -43,13 +48,19 @@ const variantChips = (item: CartItem): string[] => {
   if (model) chips.push(model);
   if (item.selectedSize) chips.push(`Size: ${item.selectedSize}`);
   if (item.selectedColor) chips.push(item.selectedColor);
+  Object.entries(item.selectedVariantAttributes || {}).forEach(([name, value]) =>
+    chips.push(`${name}: ${value}`),
+  );
   return chips;
 };
 
-const maxQtyFor = (item: CartItem) =>
-  item.product.stockQty && item.product.stockQty > 0
-    ? item.product.stockQty
+const maxQtyFor = (item: CartItem) => {
+  const variant = getCartItemVariant(item);
+  if (variant) return variant.stockQty;
+  return item.product.stockQty && item.product.stockQty > 0
+    ? getCartItemStockQty(item)
     : 99;
+};
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
   isOpen,
@@ -90,16 +101,26 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const totalQty = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalAmount = cartItems.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
+    (sum, item) => sum + getCartItemPrice(item) * item.quantity,
     0,
   );
 
   const cartPayload = cartItems.map((item) => ({
     name: item.product.name,
     quantity: item.quantity,
-    price: item.product.price,
+    price: getCartItemPrice(item),
     sku: item.product.sku,
     id: item.product.id,
+    variant: [
+      item.selectedModel,
+      item.selectedSize && `Size: ${item.selectedSize}`,
+      item.selectedColor,
+      ...Object.entries(item.selectedVariantAttributes || {}).map(
+        ([name, value]) => `${name}: ${value}`,
+      ),
+    ]
+      .filter(Boolean)
+      .join(", "),
   }));
 
   const handleClear = () => {
@@ -233,7 +254,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       )}
 
                       <p className="text-xs text-gray-500 mt-1">
-                        {formatPrice(item.product.price)} each
+                        {formatPrice(getCartItemPrice(item))} each
                       </p>
 
                       <div className="mt-auto pt-2.5 flex items-center justify-between gap-2">
@@ -271,7 +292,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         </div>
 
                         <span className="text-sm font-extrabold text-[#00503a] font-montserrat">
-                          {formatPrice(item.product.price * item.quantity)}
+                          {formatPrice(getCartItemPrice(item) * item.quantity)}
                         </span>
                       </div>
 

@@ -5,9 +5,19 @@ export interface IColorVariant {
   hex: string;
 }
 
+export interface IProductVariant {
+  key: string;
+  attributes: Record<string, string>;
+  regularPrice: number;
+  salePrice?: number;
+  stockQty: number;
+  sku?: string;
+}
+
 export interface IProduct {
   name: string;
   nameEn?: string;
+  brand?: string | null;
   sku?: string;
   model?: string;
   models?: string[];
@@ -23,6 +33,9 @@ export interface IProduct {
   discountBadge?: string;
   image: string;
   images?: string[];
+  videos?: string[];
+  variantAttributes?: Array<{ name: string; values: string[] }>;
+  variants?: IProductVariant[];
   inStock: boolean;
   stockQty?: number;
   lowStockThreshold?: number;
@@ -55,11 +68,24 @@ const colorVariantSchema = new Schema<IColorVariant>(
   { _id: false },
 );
 
+const productVariantSchema = new Schema<IProductVariant>(
+  {
+    key: { type: String, required: true, trim: true, maxlength: 500 },
+    attributes: { type: Schema.Types.Mixed, required: true },
+    regularPrice: { type: Number, required: true, min: 0 },
+    salePrice: { type: Number, min: 0 },
+    stockQty: { type: Number, required: true, min: 0 },
+    sku: { type: String, trim: true, maxlength: 60 },
+  },
+  { _id: false },
+);
+
 const productSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true, maxlength: 200 },
     nameEn: { type: String, trim: true, maxlength: 200 },
-    sku: { type: String, trim: true, maxlength: 60, index: true },
+    brand: { type: String, trim: true, maxlength: 100 },
+    sku: { type: String, trim: true, maxlength: 60 },
     model: { type: String, trim: true, maxlength: 100 },
     models: [{ type: String, trim: true }],
     sizes: [{ type: String, trim: true }],
@@ -74,6 +100,14 @@ const productSchema = new Schema<IProduct>(
     discountBadge: { type: String, trim: true, maxlength: 40 },
     image: { type: String, required: true },
     images: [{ type: String }],
+    videos: [{ type: String, trim: true, maxlength: 2048 }],
+    variantAttributes: [
+      {
+        name: { type: String, required: true, trim: true, maxlength: 60 },
+        values: [{ type: String, trim: true, maxlength: 100 }],
+      },
+    ],
+    variants: { type: [productVariantSchema], default: [] },
     inStock: { type: Boolean, default: true },
     stockQty: { type: Number, default: 0, min: 0 },
     lowStockThreshold: { type: Number, default: 10, min: 0 },
@@ -99,6 +133,20 @@ const productSchema = new Schema<IProduct>(
 );
 
 productSchema.index({ name: "text", description: "text" });
+productSchema.index(
+  { sku: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { sku: { $type: "string", $gt: "" } },
+  },
+);
+productSchema.index(
+  { "variants.sku": 1 },
+  {
+    unique: true,
+    partialFilterExpression: { "variants.sku": { $type: "string", $gt: "" } },
+  },
+);
 
 productSchema.set("toJSON", {
   virtuals: true,

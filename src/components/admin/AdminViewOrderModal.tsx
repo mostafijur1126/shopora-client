@@ -22,6 +22,9 @@ import {
   RotateCcw,
   ExternalLink,
   CreditCard,
+  ZoomIn,
+  ZoomOut,
+  X,
 } from "lucide-react";
 
 interface AdminViewOrderModalProps {
@@ -60,14 +63,11 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
   >("cash");
   const [paymentBusy, setPaymentBusy] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState("");
-
-  const subtotal =
-    order.subtotal ||
-    (order.orderedProducts && order.orderedProducts.length > 0
-      ? order.orderedProducts.reduce((acc, p) => acc + p.price * p.quantity, 0)
-      : order.total -
-        (order.deliveryCharge ||
-          (order.deliveryZone === "outside_dhaka" ? 130 : 70)));
+  const [failedPaymentScreenshots, setFailedPaymentScreenshots] =
+    React.useState<Record<string, boolean>>({});
+  const [previewPaymentScreenshot, setPreviewPaymentScreenshot] =
+    React.useState<{ url: string; label: string } | null>(null);
+  const [previewZoom, setPreviewZoom] = React.useState(1);
 
   const deliveryCharge =
     order.deliveryCharge !== undefined
@@ -75,6 +75,60 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
       : order.deliveryZone === "outside_dhaka"
         ? 130
         : 70;
+  const discount = order.discount ?? 0;
+  const subtotal =
+    order.subtotal ??
+    (order.orderedProducts && order.orderedProducts.length > 0
+      ? order.orderedProducts.reduce((acc, p) => acc + p.price * p.quantity, 0)
+      : Math.max(0, order.total - deliveryCharge + discount));
+  const totalQuantity = order.orderedProducts?.reduce(
+    (quantity, item) => quantity + item.quantity,
+    0,
+  );
+  const paymentsToDisplay =
+    order.payments && order.payments.length > 0
+      ? order.payments
+      : order.paymentProof
+        ? [
+            {
+              id: "legacy-payment-proof",
+              amount: order.paymentProof.amount,
+              method: order.paymentMethod === "nagad" ? "nagad" as const : "bkash" as const,
+              transactionId: order.paymentProof.transactionId,
+              screenshot: order.paymentProof.screenshot,
+              status: "pending" as const,
+            },
+          ]
+        : [];
+
+  React.useEffect(() => {
+    if (!previewPaymentScreenshot) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewPaymentScreenshot(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [previewPaymentScreenshot]);
+
+  const getVariantAttributes = (
+    item: NonNullable<OrderItem["orderedProducts"]>[number],
+  ) => {
+    const attributes = { ...(item.selectedVariantAttributes || {}) };
+    const addLegacyAttribute = (name: string, value?: string) => {
+      if (
+        value &&
+        !Object.keys(attributes).some(
+          (existing) => existing.toLowerCase() === name.toLowerCase(),
+        )
+      ) {
+        attributes[name] = value;
+      }
+    };
+    addLegacyAttribute("Model", item.selectedModel || item.model);
+    addLegacyAttribute("Size", item.selectedSize);
+    addLegacyAttribute("Color", item.selectedColor);
+    return Object.entries(attributes);
+  };
 
   const handleCopyTracking = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -192,6 +246,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
   };
 
   return (
+    <>
     <div className="w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col font-sans">
       {/* Page Header */}
       <div className="p-4 sm:p-5 bg-[#003828] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
@@ -560,10 +615,12 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
               </strong>
             </p>
 
-            {order.payments && order.payments.length > 0 && (
+            {paymentsToDisplay.length > 0 && (
               <div className="space-y-2 border-t border-gray-100 pt-3">
-                {order.payments.map((payment, index) => {
+                {paymentsToDisplay.map((payment, index) => {
                   const paymentId = payment.id || payment._id || `payment-${index}`;
+                  const screenshotUrl = payment.screenshot || "";
+                  const isLegacyProof = paymentId === "legacy-payment-proof";
                   const paymentMethodLabel =
                     payment.method === "bkash"
                       ? "bKash"
@@ -588,22 +645,51 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                           TrxID: <span className="font-mono">{payment.transactionId}</span>
                         </p>
                       )}
-                      {payment.screenshot && (
-                        <a
-                          href={payment.screenshot}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-xs font-bold text-[#00503a] underline"
-                        >
-                          <img
-                            src={payment.screenshot}
-                            alt={`${paymentMethodLabel} payment proof`}
-                            className="h-14 w-14 rounded-lg border border-gray-200 object-cover"
-                          />
-                          View payment screenshot
-                        </a>
+                      {screenshotUrl && (
+                        failedPaymentScreenshots[paymentId] ? (
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="text-amber-800">
+                              Screenshot preview unavailable.
+                            </span>
+                            <a
+                              href={screenshotUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-bold text-[#00503a] underline"
+                            >
+                              Open original
+                            </a>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPreviewZoom(1);
+                              setPreviewPaymentScreenshot({
+                                url: screenshotUrl,
+                                label: `${paymentMethodLabel} payment proof`,
+                              });
+                            }}
+                            className="inline-flex min-h-11 items-center gap-2 text-left text-xs font-bold text-[#00503a] underline"
+                          >
+                            <img
+                              src={screenshotUrl}
+                              alt={`${paymentMethodLabel} payment proof`}
+                              onError={() =>
+                                setFailedPaymentScreenshots((previous) => ({
+                                  ...previous,
+                                  [paymentId]: true,
+                                }))
+                              }
+                              className="h-14 w-14 rounded-lg border border-gray-200 object-cover"
+                            />
+                            View payment screenshot
+                          </button>
+                        )
                       )}
-                      {payment.status === "pending" && onReviewPayment && (
+                      {!isLegacyProof &&
+                        payment.status === "pending" &&
+                        onReviewPayment && (
                         <div className="flex flex-wrap items-center gap-2">
                           <label className="text-xs text-gray-600">
                             Received amount
@@ -696,7 +782,7 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
             )}
           </div>
 
-          {/* Ordered Products Table */}
+          {/* Ordered Products */}
           <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden">
             <div className="p-3 sm:p-4 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-[#003828] font-bold text-sm">
@@ -712,101 +798,102 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
             </div>
 
             <div className="divide-y divide-gray-100">
-              <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_8rem_7rem_8rem] gap-3 bg-[#f8faf9] px-4 py-2.5 text-[10px] font-bold uppercase text-gray-600">
-                <span>Item</span>
-                <span className="text-center">Unit Price</span>
-                <span className="text-center">Quantity</span>
-                <span className="text-right">Total</span>
-              </div>
               {order.orderedProducts && order.orderedProducts.length > 0 ? (
-                order.orderedProducts.map((item, idx) => (
-                  <div
-                    key={item.id || idx}
-                    className="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_8rem_7rem_8rem] items-center gap-x-3 gap-y-2 p-3 sm:p-4 text-xs"
-                  >
-                    <div className="col-span-2 md:col-span-1 flex items-center gap-3 min-w-0">
-                      {item.image && (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-12 h-12 object-cover rounded-lg border border-gray-200 shrink-0"
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-bold text-gray-900 break-words">
-                          {item.name}
-                        </p>
-                        {item.sku && (
-                          <p className="text-[10px] font-mono text-gray-400 break-all">
-                            SKU: {item.sku}
-                          </p>
+                order.orderedProducts.map((item, idx) => {
+                  const attributes = getVariantAttributes(item);
+                  const regularPrice = item.regularPrice ?? item.price;
+                  return (
+                    <article
+                      key={`${item.id || "item"}-${item.selectedVariantKey || ""}-${idx}`}
+                      className="space-y-3 p-3 sm:p-4"
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-14 w-14 object-cover rounded-lg border border-gray-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="h-14 w-14 rounded-lg border border-gray-200 bg-gray-50 shrink-0 flex items-center justify-center">
+                            <Package className="h-5 w-5 text-gray-400" />
+                          </div>
                         )}
-                        <div className="flex flex-wrap gap-x-2 text-[10px] text-gray-500">
-                          {(item.selectedModel || item.model) && (
-                            <span>Model: {item.selectedModel || item.model}</span>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 break-words">
+                            {item.name}
+                          </p>
+                          <p className="mt-1 text-[10px] text-gray-600">
+                            Brand: {item.brand || "Not recorded"}
+                          </p>
+                          {item.sku && (
+                            <p className="text-[10px] font-mono text-gray-500 break-all">
+                              {item.selectedVariantKey && !item.variantSku
+                                ? "Recorded SKU"
+                                : "Product SKU"}
+                              : {item.sku}
+                            </p>
                           )}
-                          {item.selectedSize && (
-                            <span>Size: {item.selectedSize}</span>
+                          {item.variantSku && (
+                            <p className="text-[10px] font-mono text-gray-500 break-all">
+                              Variant SKU: {item.variantSku}
+                            </p>
                           )}
-                          {item.selectedColor && (
-                            <span>Color: {item.selectedColor}</span>
+                          {attributes.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {attributes.map(([name, value]) => (
+                                <span
+                                  key={name}
+                                  className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-900"
+                                >
+                                  {name}: {value}
+                                </span>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>
-                    </div>
-                    <div className="md:text-center">
-                      <span className="block text-[10px] text-gray-500 md:hidden">
-                        Unit Price
-                      </span>
-                      <span className="font-montserrat font-medium text-gray-700">
-                        {item.price.toLocaleString()} tk
-                      </span>
-                    </div>
-                    <div className="md:text-center">
-                      <span className="block text-[10px] text-gray-500 md:hidden">
-                        Quantity
-                      </span>
-                      <span className="font-bold text-gray-900">
-                        {item.quantity}
-                      </span>
-                    </div>
-                    <div className="col-span-2 md:col-span-1 flex items-center justify-between md:justify-end border-t border-gray-100 pt-2 md:border-0 md:pt-0">
-                      <span className="text-[10px] text-gray-500 md:hidden">
-                        Total
-                      </span>
-                      <span className="font-montserrat font-bold text-gray-900">
-                        {(item.price * item.quantity).toLocaleString()} tk
-                      </span>
-                    </div>
-                  </div>
-                ))
+                      <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-50 p-3 text-xs sm:grid-cols-5">
+                        <div>
+                          <p className="text-[10px] text-gray-500">Regular price</p>
+                          <p className="font-semibold text-gray-700">
+                            {regularPrice.toLocaleString()} tk
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">Sale price</p>
+                          <p className="font-semibold text-gray-700">
+                            {item.salePrice !== undefined
+                              ? `${item.salePrice.toLocaleString()} tk`
+                              : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">Ordered price</p>
+                          <p className="font-bold text-gray-900">
+                            {item.price.toLocaleString()} tk
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">Quantity</p>
+                          <p className="font-bold text-gray-900">{item.quantity}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">Product subtotal</p>
+                          <p className="font-bold text-[#00503a]">
+                            {(item.price * item.quantity).toLocaleString()} tk
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_8rem_7rem_8rem] items-center gap-x-3 gap-y-2 p-3 sm:p-4 text-xs">
-                  <p className="col-span-2 md:col-span-1 font-bold text-gray-900 break-words">
-                    {order.items}
+                <div className="p-4 text-xs text-gray-700">
+                  <p className="font-bold text-gray-900">{order.items}</p>
+                  <p className="mt-1 text-gray-500">
+                    Item-level product details were not recorded for this order.
                   </p>
-                  <div>
-                    <span className="block text-[10px] text-gray-500 md:hidden">
-                      Unit Price
-                    </span>
-                    <span className="font-montserrat text-gray-700">
-                      {subtotal.toLocaleString()} tk
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] text-gray-500 md:hidden">
-                      Quantity
-                    </span>
-                    <span className="font-bold text-gray-900">1</span>
-                  </div>
-                  <div className="col-span-2 md:col-span-1 flex items-center justify-between md:justify-end border-t border-gray-100 pt-2 md:border-0 md:pt-0">
-                    <span className="text-[10px] text-gray-500 md:hidden">
-                      Total
-                    </span>
-                    <span className="font-montserrat font-bold text-gray-900">
-                      {subtotal.toLocaleString()} tk
-                    </span>
-                  </div>
                 </div>
               )}
             </div>
@@ -823,7 +910,15 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                 <p className="font-mono text-[11px]">Ref ID: #{order.id}</p>
               </div>
 
-              <div className="w-full sm:w-64 bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2 text-xs">
+              <div className="w-full sm:w-72 bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2 text-xs">
+                <div className="flex justify-between text-gray-600">
+                  <span>Total product quantity:</span>
+                  <span className="font-bold">
+                    {totalQuantity === undefined
+                      ? "Not recorded"
+                      : totalQuantity.toLocaleString()}
+                  </span>
+                </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal:</span>
                   <span className="font-montserrat font-bold">
@@ -831,13 +926,19 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span>Delivery Fee:</span>
+                  <span>Shipping charge:</span>
                   <span className="font-montserrat font-bold">
-                    {deliveryCharge} tk
+                    {deliveryCharge.toLocaleString()} tk
+                  </span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Discount:</span>
+                  <span className="font-montserrat font-bold">
+                    {discount > 0 ? `−${discount.toLocaleString()}` : "0"} tk
                   </span>
                 </div>
                 <div className="border-t border-gray-200 pt-2 flex justify-between text-sm font-extrabold text-[#00503a]">
-                  <span>Total Amount:</span>
+                  <span>Total order amount:</span>
                   <span className="font-montserrat font-extrabold text-base">
                     {order.total.toLocaleString()} tk
                   </span>
@@ -885,5 +986,77 @@ export const AdminViewOrderModal: React.FC<AdminViewOrderModalProps> = ({
           </button>
         </div>
     </div>
+    {previewPaymentScreenshot && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={previewPaymentScreenshot.label}
+        className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-3 sm:p-6"
+        onClick={() => setPreviewPaymentScreenshot(null)}
+      >
+        <button
+          type="button"
+          aria-label="Close image preview"
+          onClick={() => setPreviewPaymentScreenshot(null)}
+          className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <div
+          className="flex max-h-full w-full flex-col items-center gap-3"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex min-h-11 items-center gap-2 text-white">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              disabled={previewZoom <= 1}
+              onClick={() =>
+                setPreviewZoom((zoom) =>
+                  Math.max(1, Number((zoom - 0.25).toFixed(2))),
+                )
+              }
+              className="min-h-11 min-w-11 rounded-lg bg-white/15 disabled:opacity-40"
+            >
+              <ZoomOut className="mx-auto h-5 w-5" />
+            </button>
+            <span className="min-w-12 text-center text-xs">
+              {Math.round(previewZoom * 100)}%
+            </span>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              disabled={previewZoom >= 3}
+              onClick={() =>
+                setPreviewZoom((zoom) =>
+                  Math.min(3, Number((zoom + 0.25).toFixed(2))),
+                )
+              }
+              className="min-h-11 min-w-11 rounded-lg bg-white/15 disabled:opacity-40"
+            >
+              <ZoomIn className="mx-auto h-5 w-5" />
+            </button>
+            <a
+              href={previewPaymentScreenshot.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-white/15 px-3 text-xs font-semibold hover:bg-white/25"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open original
+            </a>
+          </div>
+          <div className="max-h-[85vh] max-w-full overflow-auto">
+            <img
+              src={previewPaymentScreenshot.url}
+              alt={previewPaymentScreenshot.label}
+              className="max-h-[85vh] max-w-[94vw] object-contain transition-transform"
+              style={{ transform: `scale(${previewZoom})` }}
+            />
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

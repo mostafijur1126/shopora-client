@@ -13,10 +13,25 @@ export interface ColorVariant {
   hex: string;
 }
 
+export interface ProductVariantAttribute {
+  name: string;
+  values: string[];
+}
+
+export interface ProductVariant {
+  key: string;
+  attributes: Record<string, string>;
+  regularPrice: number;
+  salePrice?: number;
+  stockQty: number;
+  sku?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
   nameEn?: string;
+  brand?: string | null;
   sku?: string;
   model?: string; // Primary Model number or name (e.g. 'Pro-Max V2', 'TX-500', 'Standard')
   models?: string[]; // Multiple available models/variants (e.g. ['Model A', 'Model B', 'Model C'])
@@ -35,6 +50,9 @@ export interface Product {
   discountBadge?: string;
   image: string;
   images?: string[];
+  videos?: string[];
+  variantAttributes?: ProductVariantAttribute[];
+  variants?: ProductVariant[];
   imageAlt?: string;
   inStock: boolean;
   stockQty?: number;
@@ -72,6 +90,8 @@ export interface CartItem {
   selectedModel?: string;
   selectedSize?: string;
   selectedColor?: string;
+  selectedVariantKey?: string;
+  selectedVariantAttributes?: Record<string, string>;
 }
 
 export type ActiveScreen =
@@ -97,14 +117,20 @@ export interface AdminStats {
 export interface OrderedProductSummary {
   id: string;
   name: string;
+  brand?: string;
   sku?: string;
+  variantSku?: string;
   model?: string;
   price: number;
+  regularPrice?: number;
+  salePrice?: number;
   quantity: number;
   image?: string;
   selectedModel?: string;
   selectedSize?: string;
   selectedColor?: string;
+  selectedVariantKey?: string;
+  selectedVariantAttributes?: Record<string, string>;
 }
 
 export type OrderStatus =

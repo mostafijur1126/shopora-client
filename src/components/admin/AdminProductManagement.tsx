@@ -44,7 +44,9 @@ const diffProduct = (original: Product, next: Product): Partial<Product> => {
 };
 
 const getStockInfo = (p: Product) => {
-  const qty = p.stockQty ?? 0;
+  const qty = p.variants?.length
+    ? p.variants.reduce((total, variant) => total + variant.stockQty, 0)
+    : p.stockQty ?? 0;
   const threshold = p.lowStockThreshold ?? 10;
   const out = !p.inStock || qty <= 0;
   const low = !out && qty <= threshold;
@@ -196,6 +198,7 @@ export const AdminProductManagement: React.FC<AdminProductManagementProps> = ({
 
   const renderStockControls = (product: Product) => {
     const { qty, out, low } = getStockInfo(product);
+    const hasVariantInventory = Boolean(product.variants?.length);
     return (
       <div className="flex items-center gap-2 flex-wrap">
         <span
@@ -213,8 +216,9 @@ export const AdminProductManagement: React.FC<AdminProductManagementProps> = ({
           <button
             type="button"
             onClick={() => handleQuickAdjustStock(product, -1)}
-            disabled={qty <= 0}
+            disabled={qty <= 0 || hasVariantInventory}
             aria-label="Decrease stock by 1"
+            title={hasVariantInventory ? "Edit stock by variant in the product form" : undefined}
             className="w-9 h-9 rounded-lg bg-white hover:bg-red-50 text-gray-600 hover:text-red-600 disabled:opacity-40 font-bold text-xs flex items-center justify-center cursor-pointer"
           >
             -1
@@ -222,7 +226,9 @@ export const AdminProductManagement: React.FC<AdminProductManagementProps> = ({
           <button
             type="button"
             onClick={() => handleQuickAdjustStock(product, 5)}
+            disabled={hasVariantInventory}
             aria-label="Increase stock by 5"
+            title={hasVariantInventory ? "Edit stock by variant in the product form" : undefined}
             className="w-9 h-9 rounded-lg bg-white hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 font-bold text-xs flex items-center justify-center cursor-pointer ml-0.5"
           >
             +5
@@ -230,7 +236,9 @@ export const AdminProductManagement: React.FC<AdminProductManagementProps> = ({
           <button
             type="button"
             onClick={() => handleQuickAdjustStock(product, 10)}
+            disabled={hasVariantInventory}
             aria-label="Increase stock by 10"
+            title={hasVariantInventory ? "Edit stock by variant in the product form" : undefined}
             className="w-10 h-9 rounded-lg bg-[#00503a] hover:bg-[#003828] text-white font-bold text-xs flex items-center justify-center cursor-pointer ml-0.5"
           >
             +10

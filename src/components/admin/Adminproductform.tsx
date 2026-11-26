@@ -1,5 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Product, CategoryItem, ColorVariant } from "../../types";
+import {
+  Product,
+  CategoryItem,
+  ColorVariant,
+  ProductVariant,
+  ProductVariantAttribute,
+} from "../../types";
 
 import {
   ArrowLeft,
@@ -9,15 +15,18 @@ import {
   Check,
   AlertCircle,
   UploadCloud,
-  Star,
   Loader2,
   Palette,
   Ruler,
   Layers,
   CheckCircle2,
+  Video,
+  MoveUp,
+  MoveDown,
+  Link as LinkIcon,
 } from "lucide-react";
 import { compressImage } from "@/src/utils/Image";
-import { uploadImageApi } from "@/src/utils/uploadImage";
+import { uploadProductMediaApi } from "@/src/utils/uploadImage";
 import { scrollElementIntoView } from "../../utils/scroll";
 
 /* ------------------------------------------------------------------ */
@@ -86,8 +95,11 @@ const PRESET_SIZES = [
 ];
 
 const MAX_IMAGES = 6;
+const MAX_VIDEOS = 5;
+const MAX_VARIANTS = 200;
 const MAX_FEATURES = 12;
 const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 // Used to clear a field on update (JSON `null` makes the server unset it)
 const CLEAR = null as unknown as undefined;
@@ -101,6 +113,15 @@ interface SpecRow {
   value: string;
 }
 
+interface VariantDraft {
+  key: string;
+  attributes: Record<string, string>;
+  regularPrice: string;
+  salePrice: string;
+  stockQty: string;
+  sku: string;
+}
+
 interface PdpVisibility {
   description: boolean;
   specifications: boolean;
@@ -112,6 +133,7 @@ interface PdpVisibility {
 interface FormState {
   name: string;
   nameEn: string;
+  brand: string;
   category: string;
   sku: string;
   price: string;
@@ -133,6 +155,9 @@ interface FormState {
   model: string;
   models: string[];
   images: string[];
+  videos: string[];
+  variantAttributes: ProductVariantAttribute[];
+  variants: VariantDraft[];
   inStock: boolean;
   isPopular: boolean;
   isFeatured: boolean;
@@ -149,7 +174,8 @@ type ErrorKey =
   | "stockQty"
   | "lowStockThreshold"
   | "sku"
-  | "images";
+  | "images"
+  | "variants";
 
 type Errors = Partial<Record<ErrorKey, string>>;
 
@@ -164,11 +190,13 @@ const ERROR_ORDER: ErrorKey[] = [
   "lowStockThreshold",
   "sku",
   "images",
+  "variants",
 ];
 
 const emptyState = (): FormState => ({
   name: "",
   nameEn: "",
+  brand: "",
   category: LEGACY_CATEGORIES[0].value,
   sku: "",
   price: "",
@@ -190,6 +218,9 @@ const emptyState = (): FormState => ({
   model: "",
   models: [],
   images: [],
+  videos: [],
+  variantAttributes: [],
+  variants: [],
   inStock: true,
   isPopular: false,
   isFeatured: false,
@@ -225,6 +256,7 @@ const fromProduct = (p: Product): FormState => {
   return {
     name: p.name || "",
     nameEn: p.nameEn || "",
+    brand: p.brand || "",
     category: p.category || LEGACY_CATEGORIES[0].value,
     sku: p.sku || "",
     price: p.price ? String(p.price) : "",
@@ -258,6 +290,22 @@ const fromProduct = (p: Product): FormState => {
           ? [p.model]
           : [],
     images: gallery,
+    videos: p.videos ? [...p.videos] : [],
+    variantAttributes: p.variantAttributes
+      ? p.variantAttributes.map((attribute) => ({
+          name: attribute.name,
+          values: [...attribute.values],
+        }))
+      : [],
+    variants: p.variants
+      ? p.variants.map((variant) => ({
+          ...variant,
+          regularPrice: String(variant.regularPrice),
+          salePrice: variant.salePrice === undefined ? "" : String(variant.salePrice),
+          stockQty: String(variant.stockQty),
+          sku: variant.sku || "",
+        }))
+      : [],
     inStock: p.inStock,
     isPopular: Boolean(p.isPopular),
     isFeatured: Boolean(p.isFeatured),
@@ -277,6 +325,80 @@ const fromProduct = (p: Product): FormState => {
 /* ------------------------------------------------------------------ */
 
 const norm = (s?: string | null) => (s || "").trim().toLowerCase();
+
+const makeVariantKey = (attributes: Record<string, string>) =>
+  JSON.stringify(
+    Object.fromEntries(
+      Object.entries(attributes).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    ),
+  );
+
+const getYoutubeEmbedUrl = (value: string): string | null => {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    if (hostname === "youtu.be") {
+      return `https://www.youtube-nocookie.com/embed/${url.pathname.slice(1)}`;
+    }
+    if (!["youtube.com", "www.youtube.com", "m.youtube.com"].includes(hostname)) {
+      return null;
+    }
+    const id =
+      url.searchParams.get("v") ||
+      url.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
+    return id ? `https://www.youtube-nocookie.com/embed/${id}` : null;
+  } catch {
+    return null;
+  }
+};
+
+const generateVariantDrafts = (
+  attributes: ProductVariantAttribute[],
+  current: VariantDraft[],
+  defaults: Pick<VariantDraft, "regularPrice" | "stockQty"> = {
+    regularPrice: "",
+    stockQty: "0",
+  },
+): VariantDraft[] => {
+  if (!attributes.length) return [];
+  const count = attributes.reduce(
+    (total, attribute) => total * attribute.values.length,
+    1,
+  );
+  if (count > MAX_VARIANTS) {
+    throw new Error(`A product can have up to ${MAX_VARIANTS} combinations.`);
+  }
+
+  const existing = new Map(current.map((variant) => [variant.key, variant]));
+  let combinations: Record<string, string>[] = [{}];
+  for (const attribute of attributes) {
+    combinations = combinations.flatMap((combination) =>
+      attribute.values.map((value) => ({
+        ...combination,
+        [attribute.name]: value,
+      })),
+    );
+  }
+
+  const hasExistingCombination = combinations.some((values) =>
+    existing.has(makeVariantKey(values)),
+  );
+  return combinations.map((values, index) => {
+    const key = makeVariantKey(values);
+    const previous = existing.get(key);
+    return previous
+      ? { ...previous, key, attributes: values }
+      : {
+          key,
+          attributes: values,
+          regularPrice: defaults.regularPrice,
+          salePrice: "",
+          stockQty:
+            !hasExistingCombination && index === 0 ? defaults.stockQty : "0",
+          sku: "",
+        };
+  });
+};
 
 // '' -> undefined, '12' -> 12, 'abc' -> NaN
 const parseNum = (s: string): number | undefined => {
@@ -393,7 +515,6 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
 
   const [uploading, setUploading] = useState(0);
   const [uploadMessages, setUploadMessages] = useState<string[]>([]);
-  const [inlineImages, setInlineImages] = useState(false);
 
   // draft inputs for the "add" rows
   const [newFeature, setNewFeature] = useState("");
@@ -403,8 +524,15 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
   const [colorHex, setColorHex] = useState("#007A55");
   const [sizeInput, setSizeInput] = useState("");
   const [modelInput, setModelInput] = useState("");
+  const [videoUrlInput, setVideoUrlInput] = useState("");
+  const [variantAttributeName, setVariantAttributeName] = useState("");
+  const [variantAttributeValue, setVariantAttributeValue] = useState("");
+  const [variantValueInputs, setVariantValueInputs] = useState<
+    Record<string, string>
+  >({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -484,13 +612,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           throw new Error(`${file.name}: the file is larger than 15 MB.`);
         const processed = await compressImage(file);
 
-        let url = await uploadImageApi(processed.blob, processed.name);
-        if (!url) {
-          // No upload endpoint on the server: keep the compressed image inline
-          url = processed.dataUrl;
-          setInlineImages(true);
-        }
-        const finalUrl = url;
+        const finalUrl = await uploadProductMediaApi(processed.blob);
         setForm((prev) =>
           prev.images.length < MAX_IMAGES
             ? { ...prev, images: [...prev.images, finalUrl] }
@@ -507,16 +629,165 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const makeMainImage = (index: number) => {
-    if (index === 0) return;
-    const next = [...form.images];
-    const [picked] = next.splice(index, 1);
-    next.unshift(picked);
-    patch({ images: next });
+  const moveMedia = (media: "images" | "videos", index: number, direction: -1 | 1) => {
+    const items = [...form[media]];
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+    [items[index], items[target]] = [items[target], items[index]];
+    patch({ [media]: items });
   };
 
   const removeImage = (index: number) =>
     patch({ images: form.images.filter((_, i) => i !== index) });
+
+  const handleVideoFiles = async (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    const remaining = Math.max(0, MAX_VIDEOS - form.videos.length);
+    const files = Array.from(fileList).slice(0, remaining);
+    if (files.length < fileList.length) {
+      setUploadMessages([`You can add up to ${MAX_VIDEOS} videos per product.`]);
+    } else {
+      setUploadMessages([]);
+    }
+
+    setUploading((count) => count + files.length);
+    for (const file of files) {
+      try {
+        if (!file.type.startsWith("video/")) {
+          throw new Error(`${file.name}: please choose a video file.`);
+        }
+        if (file.size > MAX_VIDEO_BYTES) {
+          throw new Error(`${file.name}: videos must be 100 MB or smaller.`);
+        }
+        const url = await uploadProductMediaApi(file);
+        setForm((previous) =>
+          previous.videos.length < MAX_VIDEOS
+            ? { ...previous, videos: [...previous.videos, url] }
+            : previous,
+        );
+        setDirty(true);
+      } catch (error) {
+        setUploadMessages((messages) => [
+          ...messages,
+          error instanceof Error ? error.message : "Video upload failed.",
+        ]);
+      } finally {
+        setUploading((count) => count - 1);
+      }
+    }
+    if (videoInputRef.current) videoInputRef.current.value = "";
+  };
+
+  const addVideoUrl = () => {
+    const value = videoUrlInput.trim();
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      showFlash("Enter a valid YouTube video URL.");
+      return;
+    }
+    const isYoutube =
+      ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(
+        url.hostname.toLowerCase(),
+      ) &&
+      (url.hostname.toLowerCase() === "youtu.be" ||
+        url.pathname === "/watch" ||
+        url.pathname.startsWith("/embed/") ||
+        url.pathname.startsWith("/shorts/"));
+    if (!isYoutube) {
+      showFlash("Only YouTube video URLs are supported.");
+      return;
+    }
+    if (form.videos.length >= MAX_VIDEOS) {
+      showFlash(`You can add up to ${MAX_VIDEOS} videos per product.`);
+      return;
+    }
+    if (form.videos.some((existing) => norm(existing) === norm(value))) {
+      showFlash("This video is already added.");
+      return;
+    }
+    patch({ videos: [...form.videos, value] });
+    setVideoUrlInput("");
+  };
+
+  const updateVariantAttributes = (attributes: ProductVariantAttribute[]) => {
+    try {
+      const defaults = {
+        regularPrice: form.price,
+        stockQty: form.stockQty || "0",
+      };
+      patch({
+        variantAttributes: attributes,
+        variants: generateVariantDrafts(attributes, form.variants, defaults),
+      });
+    } catch (error) {
+      showFlash(error instanceof Error ? error.message : "Too many variants.");
+    }
+  };
+
+  const addVariantAttribute = () => {
+    const name = variantAttributeName.trim();
+    const value = variantAttributeValue.trim();
+    if (!name || !value) {
+      showFlash("Enter both a variant name and its first value.");
+      return;
+    }
+    if (/[.$]/.test(name)) {
+      showFlash('Variant names cannot contain "." or "$".');
+      return;
+    }
+    if (form.variantAttributes.some((attribute) => norm(attribute.name) === norm(name))) {
+      showFlash("That variant attribute already exists.");
+      return;
+    }
+    updateVariantAttributes([
+      ...form.variantAttributes,
+      { name, values: [value] },
+    ]);
+    setVariantAttributeName("");
+    setVariantAttributeValue("");
+  };
+
+  const addVariantValue = (attributeName: string) => {
+    const value = variantValueInputs[attributeName]?.trim();
+    if (!value) return;
+    const attributes = form.variantAttributes.map((attribute) =>
+      attribute.name === attributeName &&
+      !attribute.values.some((existing) => norm(existing) === norm(value))
+        ? { ...attribute, values: [...attribute.values, value] }
+        : attribute,
+    );
+    if (attributes.every((attribute, index) =>
+      attribute.values.length === form.variantAttributes[index]?.values.length
+    )) {
+      showFlash("Enter a new value for this attribute.");
+      return;
+    }
+    updateVariantAttributes(attributes);
+    setVariantValueInputs((values) => ({ ...values, [attributeName]: "" }));
+  };
+
+  const removeVariantValue = (attributeName: string, value: string) => {
+    const attributes = form.variantAttributes
+      .map((attribute) =>
+        attribute.name === attributeName
+          ? {
+              ...attribute,
+              values: attribute.values.filter((item) => item !== value),
+            }
+          : attribute,
+      )
+      .filter((attribute) => attribute.values.length > 0);
+    updateVariantAttributes(attributes);
+  };
+
+  const updateVariant = (key: string, changes: Partial<VariantDraft>) =>
+    patch({
+      variants: form.variants.map((variant) =>
+        variant.key === key ? { ...variant, ...changes } : variant,
+      ),
+    });
 
   /* ---------- features ---------- */
   const addFeature = () => {
@@ -610,20 +881,22 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     const cost = parseNum(form.costPrice);
     const stock = parseNum(form.stockQty);
     const low = parseNum(form.lowStockThreshold);
+    const hasCustomVariants = form.variantAttributes.length > 0;
     const priceOk = price !== undefined && !Number.isNaN(price) && price > 0;
 
     if (form.name.trim().length < 2) next.name = "Enter the product name.";
     if (!form.category) next.category = "Choose a category.";
-    if (!priceOk) next.price = "Enter a selling price above 0.";
+    if (!hasCustomVariants && !priceOk)
+      next.price = "Enter a selling price above 0.";
 
-    if (original !== undefined) {
+    if (!hasCustomVariants && original !== undefined) {
       if (Number.isNaN(original) || original <= 0)
         next.originalPrice = "Enter a valid price.";
       else if (priceOk && original < (price as number))
         next.originalPrice =
           "Regular price should be higher than the selling price, or leave it empty.";
     }
-    if (promo !== undefined) {
+    if (!hasCustomVariants && promo !== undefined) {
       if (Number.isNaN(promo) || promo <= 0)
         next.promotionalPrice = "Enter a valid price.";
       else if (priceOk && promo >= (price as number))
@@ -633,9 +906,12 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     if (cost !== undefined && (Number.isNaN(cost) || cost < 0))
       next.costPrice = "Enter a valid cost.";
 
-    if (stock === undefined)
+    if (!hasCustomVariants && stock === undefined)
       next.stockQty = "Enter the stock quantity (0 if none).";
-    else if (Number.isNaN(stock) || stock < 0 || !Number.isInteger(stock))
+    else if (
+      !hasCustomVariants &&
+      (Number.isNaN(stock) || (stock as number) < 0 || !Number.isInteger(stock))
+    )
       next.stockQty = "Stock must be a whole number, 0 or more.";
 
     if (
@@ -647,12 +923,61 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     const sku = norm(form.sku);
     if (
       sku &&
-      existingProducts.some((p) => p.id !== product?.id && norm(p.sku) === sku)
-    )
+      existingProducts.some(
+        (p) =>
+          p.id !== product?.id &&
+          (norm(p.sku) === sku ||
+            p.variants?.some((variant) => norm(variant.sku) === sku)),
+      )
+    ) {
       next.sku = "Another product already uses this SKU.";
+    }
 
     if (form.images.length === 0)
       next.images = "Add at least one product photo.";
+
+    const attributeNames = new Set<string>();
+    for (const attribute of form.variantAttributes) {
+      const name = norm(attribute.name);
+      if (!name || attributeNames.has(name)) {
+        next.variants = "Variant attribute names must be unique.";
+      }
+      attributeNames.add(name);
+      if (
+        attribute.values.length === 0 ||
+        new Set(attribute.values.map(norm)).size !== attribute.values.length
+      ) {
+        next.variants = "Each variant attribute needs unique values.";
+      }
+    }
+    const variantSkus = new Set([norm(form.sku)].filter(Boolean));
+    for (const variant of form.variants) {
+      const regular = parseNum(variant.regularPrice);
+      const sale = parseNum(variant.salePrice);
+      const qty = parseNum(variant.stockQty);
+      if (regular === undefined || !Number.isFinite(regular) || regular <= 0) {
+        next.variants = "Enter a regular price above 0 for every combination.";
+      } else if (sale !== undefined && (!Number.isFinite(sale) || sale <= 0 || sale >= regular)) {
+        next.variants = "Sale price must be above 0 and lower than regular price.";
+      }
+      if (qty === undefined || !Number.isInteger(qty) || qty < 0) {
+        next.variants = "Enter a whole stock quantity (0 or more) for every combination.";
+      }
+      const variantSku = norm(variant.sku);
+      if (!variantSku) continue;
+      if (
+        variantSkus.has(variantSku) ||
+        existingProducts.some(
+          (p) =>
+            p.id !== product?.id &&
+            (norm(p.sku) === variantSku ||
+              p.variants?.some((existing) => norm(existing.sku) === variantSku)),
+        )
+      ) {
+        next.variants = "Each variant SKU must be unique.";
+      }
+      variantSkus.add(variantSku);
+    }
 
     setErrors(next);
     const firstKey = ERROR_ORDER.find((k) => next[k]);
@@ -672,12 +997,29 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     setSaveError("");
     if (!validate()) return;
 
-    const price = parseNum(form.price) as number;
+    const enteredPrice = parseNum(form.price) as number;
     const original = parseNum(form.originalPrice);
     const promo = parseNum(form.promotionalPrice);
     const cost = parseNum(form.costPrice);
-    const stockQty = parseNum(form.stockQty) as number;
+    const enteredStockQty = parseNum(form.stockQty) as number;
     const lowStockThreshold = parseNum(form.lowStockThreshold) ?? 10;
+    const variants: ProductVariant[] = form.variants.map((variant) => ({
+      key: variant.key,
+      attributes: variant.attributes,
+      regularPrice: parseNum(variant.regularPrice) as number,
+      salePrice: parseNum(variant.salePrice),
+      stockQty: parseNum(variant.stockQty) as number,
+      sku: variant.sku.trim() || undefined,
+    }));
+    const price = variants.length
+      ? Math.min(...variants.map((variant) => variant.salePrice ?? variant.regularPrice))
+      : enteredPrice;
+    const originalPrice = variants.length
+      ? Math.min(...variants.map((variant) => variant.regularPrice))
+      : original;
+    const stockQty = variants.length
+      ? variants.reduce((total, variant) => total + variant.stockQty, 0)
+      : enteredStockQty;
 
     const optNum = (v: number | undefined) =>
       v !== undefined ? v : isEdit ? CLEAR : undefined;
@@ -685,12 +1027,13 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
       v.trim() ? v.trim() : isEdit ? "" : undefined;
 
     let discountBadge: string | undefined;
-    if (promo && promo < price) {
-      const base = original || price;
-      const pct = Math.round(((base - promo) / base) * 100);
+    const effectivePromo = variants.length ? undefined : promo;
+    if (effectivePromo && effectivePromo < price) {
+      const base = originalPrice || price;
+      const pct = Math.round(((base - effectivePromo) / base) * 100);
       discountBadge = pct > 0 ? `Offer ${pct}% Off` : "Special Offer";
-    } else if (original && original > price) {
-      discountBadge = `Save ${Math.round(((original - price) / original) * 100)}%`;
+    } else if (originalPrice && originalPrice > price) {
+      discountBadge = `Save ${Math.round(((originalPrice - price) / originalPrice) * 100)}%`;
     }
 
     const selectedOption = categoryOptions.find(
@@ -714,19 +1057,18 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
       id: product?.id ?? `prod-${Date.now()}`,
       name: form.name.trim(),
       nameEn: optStr(form.nameEn),
-      sku:
-        form.sku.trim() ||
-        product?.sku ||
-        `SKU-${Date.now().toString(36).toUpperCase()}`,
+      brand: optStr(form.brand) ?? (isEdit ? null : undefined),
+      sku: form.sku.trim() || (isEdit ? product?.sku : undefined),
       category: form.category,
       categoryBn,
       price,
-      originalPrice: optNum(original),
-      promotionalPrice: optNum(promo),
+      originalPrice: optNum(originalPrice > price ? originalPrice : undefined),
+      promotionalPrice: optNum(effectivePromo),
       costPrice: optNum(cost),
       discountBadge: discountBadge ?? (isEdit ? "" : undefined),
       image: form.images[0],
       images: form.images.length > 1 ? form.images : [],
+      videos: form.videos,
       stockQty,
       lowStockThreshold,
       // A product with 0 stock can never be "available"
@@ -746,6 +1088,8 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
       colorVariants: form.colors,
       hasSizes: form.hasSizes,
       sizes: form.sizes,
+      variantAttributes: form.variantAttributes,
+      variants,
       pdpSectionVisibility: form.pdp,
     };
 
@@ -777,7 +1121,12 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     !Number.isNaN(costNum) &&
     !Number.isNaN(priceNum) &&
     costNum > 0;
-  const stockNum = parseNum(form.stockQty);
+  const stockNum = form.variantAttributes.length
+    ? form.variants.reduce(
+        (total, variant) => total + (parseNum(variant.stockQty) ?? 0),
+        0,
+      )
+    : parseNum(form.stockQty);
   const stockIsZero = stockNum === 0;
 
   /* ---------- render ---------- */
@@ -849,6 +1198,17 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                   className={inputCls()}
                 />
               </Field>
+              <Field id="pf-brand" label="Brand">
+                <input
+                  id="pf-brand"
+                  type="text"
+                  maxLength={100}
+                  value={form.brand}
+                  onChange={(e) => patch({ brand: e.target.value })}
+                  placeholder="e.g. North Star"
+                  className={inputCls()}
+                />
+              </Field>
               <Field
                 id="pf-category"
                 label="Category"
@@ -875,18 +1235,23 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                 id="pf-sku"
                 label="SKU code"
                 error={errors.sku}
-                hint="Leave empty to generate one automatically."
+                hint={
+                  isEdit
+                    ? "This identifier must remain unique."
+                    : "A unique SKU is generated automatically when saved."
+                }
               >
                 <input
                   id="pf-sku"
                   type="text"
                   value={form.sku}
+                  readOnly={!isEdit}
                   onChange={(e) => {
                     patch({ sku: e.target.value });
                     clearError("sku");
                   }}
-                  placeholder="e.g. JS-1002"
-                  className={`${inputCls(Boolean(errors.sku))} font-mono`}
+                  placeholder={isEdit ? "e.g. JS-1002" : "Generated on save"}
+                  className={`${inputCls(Boolean(errors.sku))} font-mono ${!isEdit ? "bg-gray-100 text-gray-500" : ""}`}
                 />
               </Field>
             </div>
@@ -898,9 +1263,13 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
               <Field
                 id="pf-price"
                 label="Selling price (tk)"
-                required
+                required={!form.variantAttributes.length}
                 error={errors.price}
-                hint="The price customers pay."
+                hint={
+                  form.variantAttributes.length
+                    ? "Variant prices are managed in the combinations below."
+                    : "The price customers pay."
+                }
               >
                 <input
                   id="pf-price"
@@ -916,26 +1285,28 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                   className={`${inputCls(Boolean(errors.price))} font-bold`}
                 />
               </Field>
-              <Field
-                id="pf-originalPrice"
-                label="Regular price (tk)"
-                error={errors.originalPrice}
-                hint="Higher than the selling price shows a discount badge."
-              >
-                <input
+              {!form.variantAttributes.length && (
+                <Field
                   id="pf-originalPrice"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  value={form.originalPrice}
-                  onChange={(e) => {
-                    patch({ originalPrice: e.target.value });
-                    clearError("originalPrice");
-                  }}
-                  placeholder="4800"
-                  className={inputCls(Boolean(errors.originalPrice))}
-                />
-              </Field>
+                  label="Regular price (tk)"
+                  error={errors.originalPrice}
+                  hint="Higher than the selling price shows a discount badge."
+                >
+                  <input
+                    id="pf-originalPrice"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    value={form.originalPrice}
+                    onChange={(e) => {
+                      patch({ originalPrice: e.target.value });
+                      clearError("originalPrice");
+                    }}
+                    placeholder="4800"
+                    className={inputCls(Boolean(errors.originalPrice))}
+                  />
+                </Field>
+              )}
               <Field
                 id="pf-costPrice"
                 label="Cost price (tk)"
@@ -977,31 +1348,38 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                   </p>
                 )}
               </Field>
-              <Field
-                id="pf-promotionalPrice"
-                label="Offer price (tk)"
-                error={errors.promotionalPrice}
-                hint="Record only: customers still pay the selling price."
-              >
-                <input
+              {!form.variantAttributes.length && (
+                <Field
                   id="pf-promotionalPrice"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  value={form.promotionalPrice}
-                  onChange={(e) => {
-                    patch({ promotionalPrice: e.target.value });
-                    clearError("promotionalPrice");
-                  }}
-                  placeholder="3500"
-                  className={inputCls(Boolean(errors.promotionalPrice))}
-                />
-              </Field>
+                  label="Offer price (tk)"
+                  error={errors.promotionalPrice}
+                  hint="Record only: customers still pay the selling price."
+                >
+                  <input
+                    id="pf-promotionalPrice"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    value={form.promotionalPrice}
+                    onChange={(e) => {
+                      patch({ promotionalPrice: e.target.value });
+                      clearError("promotionalPrice");
+                    }}
+                    placeholder="3500"
+                    className={inputCls(Boolean(errors.promotionalPrice))}
+                  />
+                </Field>
+              )}
               <Field
                 id="pf-stockQty"
                 label="Stock quantity"
-                required
+                required={!form.variantAttributes.length}
                 error={errors.stockQty}
+                hint={
+                  form.variantAttributes.length
+                    ? "Calculated from the stock quantities of all variants."
+                    : undefined
+                }
               >
                 <input
                   id="pf-stockQty"
@@ -1009,7 +1387,12 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                   inputMode="numeric"
                   min={0}
                   step={1}
-                  value={form.stockQty}
+                  value={
+                    form.variantAttributes.length
+                      ? String(stockNum ?? 0)
+                      : form.stockQty
+                  }
+                  readOnly={Boolean(form.variantAttributes.length)}
                   onChange={(e) => {
                     patch({ stockQty: e.target.value });
                     clearError("stockQty");
@@ -1062,7 +1445,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           {/* 3. Photos */}
           <Section
             title="Photos"
-            hint={`The first photo is the main one. Up to ${MAX_IMAGES} photos, resized automatically.`}
+            hint={`The first photo is the main one. Up to ${MAX_IMAGES} photos, resized and uploaded securely.`}
           >
             <div id="pf-images" tabIndex={-1} className="outline-none">
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
@@ -1084,19 +1467,28 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                       </span>
                     )}
                     <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 p-1.5 bg-gradient-to-t from-black/60 to-transparent">
-                      {index !== 0 ? (
+                      <div className="flex gap-1">
                         <button
                           type="button"
-                          onClick={() => makeMainImage(index)}
-                          aria-label="Make this the main photo"
-                          title="Make main"
-                          className="w-10 h-10 rounded-lg bg-white/90 text-amber-600 flex items-center justify-center cursor-pointer"
+                          onClick={() => moveMedia("images", index, -1)}
+                          disabled={index === 0}
+                          aria-label="Move photo earlier"
+                          title="Move earlier"
+                          className="w-9 h-9 rounded-lg bg-white/90 text-gray-700 disabled:opacity-40 flex items-center justify-center cursor-pointer"
                         >
-                          <Star className="w-4 h-4" />
+                          <MoveUp className="w-4 h-4" />
                         </button>
-                      ) : (
-                        <span />
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => moveMedia("images", index, 1)}
+                          disabled={index === form.images.length - 1}
+                          aria-label="Move photo later"
+                          title="Move later"
+                          className="w-9 h-9 rounded-lg bg-white/90 text-gray-700 disabled:opacity-40 flex items-center justify-center cursor-pointer"
+                        >
+                          <MoveDown className="w-4 h-4" />
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeImage(index)}
@@ -1155,13 +1547,129 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                 <span>{m}</span>
               </p>
             ))}
-            {inlineImages && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                The server has no image upload route yet, so photos are saved
-                inside the product record (already compressed). Add the upload
-                route before going live.
-              </p>
+          </Section>
+
+          {/* Product videos */}
+          <Section
+            title="Product videos"
+            hint={`Upload up to ${MAX_VIDEOS} videos (100 MB each) or add a YouTube link.`}
+          >
+            {form.videos.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {form.videos.map((src, index) => {
+                  const embedUrl = getYoutubeEmbedUrl(src);
+                  return (
+                    <div
+                      key={`${src}-${index}`}
+                      className="rounded-xl overflow-hidden border border-gray-200 bg-white"
+                    >
+                      {embedUrl ? (
+                        <iframe
+                          src={embedUrl}
+                          title={`Product video ${index + 1}`}
+                          className="w-full aspect-video"
+                          loading="lazy"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <video
+                          src={src}
+                          controls
+                          preload="metadata"
+                          className="w-full aspect-video bg-black"
+                        />
+                      )}
+                      <div className="flex items-center justify-between gap-2 p-2">
+                        <span className="text-[11px] text-gray-500 truncate">
+                          {embedUrl ? "YouTube video" : "Uploaded video"}
+                        </span>
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => moveMedia("videos", index, -1)}
+                            disabled={index === 0}
+                            aria-label="Move video earlier"
+                            className="w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-40 flex items-center justify-center cursor-pointer"
+                          >
+                            <MoveUp className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveMedia("videos", index, 1)}
+                            disabled={index === form.videos.length - 1}
+                            aria-label="Move video later"
+                            className="w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-40 flex items-center justify-center cursor-pointer"
+                          >
+                            <MoveDown className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              patch({
+                                videos: form.videos.filter((_, i) => i !== index),
+                              })
+                            }
+                            aria-label="Remove video"
+                            className="w-9 h-9 rounded-lg text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <div className="relative">
+                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="url"
+                  value={videoUrlInput}
+                  onChange={(event) => setVideoUrlInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addVideoUrl();
+                    }
+                  }}
+                  placeholder="Paste a YouTube video URL"
+                  aria-label="YouTube video URL"
+                  className={`${inputCls()} pl-10`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={addVideoUrl}
+                className="h-11 px-4 rounded-xl bg-[#00503a] hover:bg-[#003828] text-white text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Add YouTube
+              </button>
+            </div>
+
+            {form.videos.length < MAX_VIDEOS && (
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                className="min-h-11 w-full sm:w-auto px-4 rounded-xl border-2 border-dashed border-gray-300 hover:border-[#00503a] hover:bg-emerald-50/50 text-gray-600 hover:text-[#00503a] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Video className="w-4 h-4" />
+                Upload video from device
+              </button>
+            )}
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={(event) => handleVideoFiles(event.target.files)}
+              className="hidden"
+            />
           </Section>
 
           {/* 4. Descriptions */}
@@ -1358,8 +1866,237 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           {/* 7. Variants */}
           <Section
             title="Options customers can choose"
-            hint="Optional. Leave empty if the product has no color, size or model choice."
+            hint="Add custom attributes for combinations with their own price, SKU, and inventory. Legacy color, size, and model selectors remain available."
           >
+            <div className="rounded-xl border border-gray-200 bg-white p-3.5 sm:p-4 space-y-4">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900">
+                  Custom variant attributes
+                </h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Add attributes such as Size, Color, Material, or Weight. The
+                  combinations and their pricing/inventory are generated below.
+                </p>
+              </div>
+
+              {form.variantAttributes.map((attribute) => (
+                <div
+                  key={attribute.name}
+                  className="rounded-xl border border-gray-200 bg-gray-50/70 p-3 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-gray-800">
+                      {attribute.name}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateVariantAttributes(
+                          form.variantAttributes.filter(
+                            (item) => item.name !== attribute.name,
+                          ),
+                        )
+                      }
+                      className="min-h-9 px-2.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Remove attribute
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {attribute.values.map((value) => (
+                      <span
+                        key={`${attribute.name}-${value}`}
+                        className="inline-flex items-center gap-1 pl-2.5 pr-1 rounded-lg bg-white border border-gray-200 text-xs font-semibold"
+                      >
+                        {value}
+                        <button
+                          type="button"
+                          onClick={() => removeVariantValue(attribute.name, value)}
+                          aria-label={`Remove ${value} from ${attribute.name}`}
+                          className="w-8 h-8 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2">
+                    <input
+                      type="text"
+                      value={variantValueInputs[attribute.name] || ""}
+                      onChange={(event) =>
+                        setVariantValueInputs((values) => ({
+                          ...values,
+                          [attribute.name]: event.target.value,
+                        }))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addVariantValue(attribute.name);
+                        }
+                      }}
+                      placeholder={`Add another ${attribute.name.toLowerCase()} value`}
+                      aria-label={`New ${attribute.name} value`}
+                      className={inputCls()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addVariantValue(attribute.name)}
+                      className="h-11 px-4 rounded-xl bg-[#00503a] hover:bg-[#003828] text-white text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add value
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={variantAttributeName}
+                  onChange={(event) => setVariantAttributeName(event.target.value)}
+                  placeholder="Attribute name (e.g. Material)"
+                  aria-label="New variant attribute name"
+                  className={inputCls()}
+                />
+                <input
+                  type="text"
+                  value={variantAttributeValue}
+                  onChange={(event) => setVariantAttributeValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addVariantAttribute();
+                    }
+                  }}
+                  placeholder="First value (e.g. Cotton)"
+                  aria-label="First variant attribute value"
+                  className={inputCls()}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {["Size", "Color", "Material", "Weight"].map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setVariantAttributeName(name)}
+                    className="h-8 px-2.5 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-emerald-50 hover:text-[#00503a] text-gray-600 cursor-pointer"
+                  >
+                    + {name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={addVariantAttribute}
+                  className="h-8 px-3 rounded-lg text-[11px] font-bold bg-[#00503a] hover:bg-[#003828] text-white cursor-pointer"
+                >
+                  Add attribute
+                </button>
+              </div>
+
+              {errors.variants && (
+                <p
+                  id="pf-variants"
+                  role="alert"
+                  tabIndex={-1}
+                  className="text-xs font-semibold text-red-600 outline-none"
+                >
+                  {errors.variants}
+                </p>
+              )}
+
+              {form.variants.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                    <p className="text-sm font-bold text-gray-800">
+                      {form.variants.length} combination
+                      {form.variants.length === 1 ? "" : "s"}
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      Product listing price and stock are calculated from these.
+                    </p>
+                  </div>
+                  {form.variants.map((variant) => (
+                    <div
+                      key={variant.key}
+                      className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 space-y-3"
+                    >
+                      <p className="text-xs font-bold text-[#00503a]">
+                        {Object.entries(variant.attributes)
+                          .map(([name, value]) => `${name}: ${value}`)
+                          .join(" / ")}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                        <label className="text-[11px] font-semibold text-gray-600">
+                          Regular price (tk) *
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={variant.regularPrice}
+                            onChange={(event) =>
+                              updateVariant(variant.key, {
+                                regularPrice: event.target.value,
+                              })
+                            }
+                            className={`${inputCls(Boolean(errors.variants))} mt-1`}
+                          />
+                        </label>
+                        <label className="text-[11px] font-semibold text-gray-600">
+                          Sale price (tk)
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={variant.salePrice}
+                            onChange={(event) =>
+                              updateVariant(variant.key, {
+                                salePrice: event.target.value,
+                              })
+                            }
+                            className={`${inputCls(Boolean(errors.variants))} mt-1`}
+                          />
+                        </label>
+                        <label className="text-[11px] font-semibold text-gray-600">
+                          Stock quantity *
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={variant.stockQty}
+                            onChange={(event) =>
+                              updateVariant(variant.key, {
+                                stockQty: event.target.value,
+                              })
+                            }
+                            className={`${inputCls(Boolean(errors.variants))} mt-1`}
+                          />
+                        </label>
+                        <label className="text-[11px] font-semibold text-gray-600">
+                          SKU (optional)
+                          <input
+                            type="text"
+                            value={variant.sku}
+                            onChange={(event) =>
+                              updateVariant(variant.key, {
+                                sku: event.target.value,
+                              })
+                            }
+                            className={`${inputCls(Boolean(errors.variants))} mt-1 font-mono`}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Colors */}
             <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3.5 space-y-3">
               <div className="flex items-center justify-between gap-3">

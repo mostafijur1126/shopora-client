@@ -608,6 +608,8 @@ export default function App() {
       selectedModel: options.selectedModel ?? product.model,
       selectedSize: options.selectedSize,
       selectedColor: options.selectedColor,
+      selectedVariantKey: options.selectedVariantKey,
+      selectedVariantAttributes: options.selectedVariantAttributes,
     };
     const key = getCartLineKey(line);
     setCart((prev) => {
@@ -621,7 +623,14 @@ export default function App() {
       }
       return [...prev, line];
     });
-    const details = [line.selectedModel, line.selectedSize, line.selectedColor]
+    const details = [
+      line.selectedModel,
+      line.selectedSize,
+      line.selectedColor,
+      ...Object.entries(line.selectedVariantAttributes || {}).map(
+        ([name, value]) => `${name}: ${value}`,
+      ),
+    ]
       .filter(Boolean)
       .join(", ");
     showToast(
@@ -644,6 +653,8 @@ export default function App() {
           selectedModel: options.selectedModel ?? product.model,
           selectedSize: options.selectedSize,
           selectedColor: options.selectedColor,
+          selectedVariantKey: options.selectedVariantKey,
+          selectedVariantAttributes: options.selectedVariantAttributes,
         },
       ],
     });
@@ -717,6 +728,8 @@ export default function App() {
         selectedModel: item.selectedModel,
         selectedSize: item.selectedSize,
         selectedColor: item.selectedColor,
+        selectedVariantKey: item.selectedVariantKey,
+        selectedVariantAttributes: item.selectedVariantAttributes,
       })),
     });
 

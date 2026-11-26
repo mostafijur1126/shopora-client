@@ -90,7 +90,14 @@ export const getWhatsAppOrderLink = (
  * Builds WhatsApp cart checkout link
  */
 export const getWhatsAppCartOrderLink = (
-  items: { name: string; quantity: number; price: number; sku?: string; id?: string }[],
+  items: {
+    name: string;
+    quantity: number;
+    price: number;
+    sku?: string;
+    id?: string;
+    variant?: string;
+  }[],
   total: number
 ) => {
   const phone = '8801700000000';
@@ -99,7 +106,8 @@ export const getWhatsAppCartOrderLink = (
   items.forEach((item, idx) => {
     const itemSku = item.sku ? ` [মডেল: ${item.sku}]` : '';
     const itemLink = item.id ? `\n   লিংক: ${getProductPageUrl(item.id)}` : '';
-    text += `${idx + 1}. ${item.name}${itemSku} x ${item.quantity} = ${(item.price * item.quantity).toLocaleString()} tk${itemLink}\n`;
+    const selectedVariant = item.variant ? ` (${item.variant})` : "";
+    text += `${idx + 1}. ${item.name}${itemSku}${selectedVariant} x ${item.quantity} = ${(item.price * item.quantity).toLocaleString()} tk${itemLink}\n`;
   });
 
   text += `\n💵 সর্বমোট প্রদেয় মূল্য: ${total.toLocaleString()} tk\n\nঅনুগ্রহ করে আমার অর্ডারটি কনফার্ম করুন।`;

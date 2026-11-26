@@ -34,6 +34,8 @@ interface ManualOrderItemLine {
   price: number;
   quantity: number;
   image?: string;
+  selectedVariantKey?: string;
+  selectedVariantAttributes?: Record<string, string>;
 }
 
 export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
@@ -94,6 +96,8 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
 
   // Add a product line
   const handleAddProductLine = (prod: Product) => {
+    const defaultVariant = prod.variants?.find((variant) => variant.stockQty > 0) ??
+      prod.variants?.[0];
     setSelectedItems((prev) => {
       const existing = prev.find((item) => item.productId === prod.id);
       if (existing) {
@@ -107,9 +111,13 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
           productId: prod.id,
           name: prod.nameEn || prod.name,
           sku: prod.sku || `SKU-${prod.id.slice(-4)}`,
-          price: prod.price,
+          price: defaultVariant
+            ? defaultVariant.salePrice ?? defaultVariant.regularPrice
+            : prod.price,
           quantity: 1,
-          image: prod.image
+          image: prod.image,
+          selectedVariantKey: defaultVariant?.key,
+          selectedVariantAttributes: defaultVariant?.attributes,
         }
       ];
     });
@@ -138,6 +146,26 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
   const handleUpdateItem = (index: number, field: keyof ManualOrderItemLine, value: any) => {
     setSelectedItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const handleSelectVariant = (index: number, variantKey: string) => {
+    const line = selectedItems[index];
+    const product = products.find((item) => item.id === line.productId);
+    const variant = product?.variants?.find((item) => item.key === variantKey);
+    if (!variant) return;
+    setSelectedItems((items) =>
+      items.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              selectedVariantKey: variant.key,
+              selectedVariantAttributes: variant.attributes,
+              sku: variant.sku || product?.sku,
+              price: variant.salePrice ?? variant.regularPrice,
+            }
+          : item,
+      ),
     );
   };
 
@@ -183,13 +211,20 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
     const orderId = `ORD-MAN-${randomSuffix}`;
 
     const itemsSummary = selectedItems
-      .map((item) => `${item.name} (${item.quantity} pcs)`)
+      .map((item) => {
+        const selected = Object.entries(item.selectedVariantAttributes || {})
+          .map(([name, value]) => `${name}: ${value}`)
+          .join(", ");
+        return `${item.name}${selected ? ` [${selected}]` : ""} (${item.quantity} pcs)`;
+      })
       .join(', ');
 
     const orderedProducts: OrderedProductSummary[] = selectedItems.map((item) => ({
       id: item.productId || `custom-${Date.now()}`,
       name: item.name,
       sku: item.sku,
+      selectedVariantKey: item.selectedVariantKey,
+      selectedVariantAttributes: item.selectedVariantAttributes,
       price: item.price,
       quantity: item.quantity,
       image: item.image
@@ -691,6 +726,29 @@ export const AdminManualOrderModal: React.FC<AdminManualOrderModalProps> = ({
                           onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
                           className="min-w-0 w-full px-2 py-2 text-xs font-semibold text-gray-900 border border-transparent hover:border-gray-200 focus:border-[#00503a] rounded"
                         />
+                        {item.productId &&
+                          products.find((product) => product.id === item.productId)
+                            ?.variants?.length && (
+                            <select
+                              value={item.selectedVariantKey || ""}
+                              onChange={(event) =>
+                                handleSelectVariant(index, event.target.value)
+                              }
+                              aria-label={`Select variant for ${item.name}`}
+                              className="min-h-9 w-full mt-1 px-2 rounded-lg border border-gray-200 bg-white text-[11px] text-gray-700"
+                            >
+                              {products
+                                .find((product) => product.id === item.productId)
+                                ?.variants?.map((variant) => (
+                                  <option key={variant.key} value={variant.key}>
+                                    {Object.entries(variant.attributes)
+                                      .map(([name, value]) => `${name}: ${value}`)
+                                      .join(" / ")}
+                                    {variant.stockQty <= 0 ? " (Out of stock)" : ""}
+                                  </option>
+                                ))}
+                            </select>
+                          )}
                       </div>
 
                       {/* Unit Price */}

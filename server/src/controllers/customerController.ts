@@ -43,6 +43,10 @@ const cartSchema = z.array(
     selectedModel: z.string().trim().max(100).optional(),
     selectedSize: z.string().trim().max(50).optional(),
     selectedColor: z.string().trim().max(60).optional(),
+    selectedVariantKey: z.string().max(500).optional(),
+    selectedVariantAttributes: z
+      .record(z.string(), z.string().max(100))
+      .optional(),
   }),
 ).max(100);
 
@@ -156,8 +160,13 @@ export const mergeCustomerGuestData = asyncHandler(
     }
 
     const products = await Product.find({
-      _id: { $in: cartParsed.data.map((line) => line.productId) },
-    }).select("_id model models sizes colors colorVariants");
+      _id: {
+        $in: [
+          ...cartParsed.data.map((line) => line.productId),
+          ...customer.cart.map((line) => line.productId),
+        ],
+      },
+    }).select("_id model models sizes colors colorVariants variantAttributes variants");
     const productsById = new Map(
       products.map((product) => [String(product._id), product]),
     );
@@ -173,10 +182,16 @@ export const mergeCustomerGuestData = asyncHandler(
         ...(product.colors ?? []).map((color) => color.name),
         ...(product.colorVariants ?? []).map((color) => color.name),
       ];
+      const variant = product.variantAttributes?.length
+        ? product.variants?.find(
+            (item) => item.key === line.selectedVariantKey,
+          )
+        : undefined;
       if (
         (line.selectedModel && models.length && !models.includes(line.selectedModel)) ||
         (line.selectedSize && product.sizes?.length && !product.sizes.includes(line.selectedSize)) ||
-        (line.selectedColor && colors.length && !colors.includes(line.selectedColor))
+        (line.selectedColor && colors.length && !colors.includes(line.selectedColor)) ||
+        (product.variantAttributes?.length && !variant)
       ) {
         throw new AppError("Cart contains an invalid product variant", 400);
       }
@@ -188,15 +203,32 @@ export const mergeCustomerGuestData = asyncHandler(
       ...customer.cart,
       ...(alreadyMerged ? [] : [...(guest?.cart ?? []), ...cartParsed.data]),
     ]) {
+      const product = productsById.get(line.productId);
+      const selectedVariant =
+        product?.variantAttributes?.length && line.selectedVariantKey
+          ? product.variants?.find(
+              (variant) => variant.key === line.selectedVariantKey,
+            )
+          : undefined;
+      const defaultVariant =
+        product?.variantAttributes?.length && !selectedVariant
+          ? product.variants?.[0]
+          : undefined;
+      const variant = selectedVariant ?? defaultVariant;
+      const selectedVariantKey = variant?.key ?? line.selectedVariantKey;
       const key = [
         line.productId,
         line.selectedModel ?? "",
         line.selectedSize ?? "",
         line.selectedColor ?? "",
+        selectedVariantKey ?? "",
       ].join("::");
       const current = combined.get(key);
       combined.set(key, {
         ...line,
+        selectedVariantKey,
+        selectedVariantAttributes:
+          variant?.attributes ?? line.selectedVariantAttributes,
         quantity: Math.min(10000, (current?.quantity ?? 0) + line.quantity),
       });
     }

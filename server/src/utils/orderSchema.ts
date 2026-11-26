@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ORDER_STATUSES } from "./orderLogic.js";
 
-const paymentScreenshotSchema = z
+const dataUrlScreenshotSchema = z
   .string()
   .max(7_000_000)
   .regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/)
@@ -9,6 +9,28 @@ const paymentScreenshotSchema = z
     const encoded = value.slice(value.indexOf(",") + 1);
     return Math.floor((encoded.length * 3) / 4) <= 5_000_000;
   }, "Screenshot must be 5 MB or smaller");
+
+const cloudinaryScreenshotSchema = z
+  .string()
+  .url()
+  .max(2048)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return (
+        url.protocol === "https:" &&
+        url.hostname === "res.cloudinary.com" &&
+        /^\/[^/]+\/image\/upload\//.test(url.pathname)
+      );
+    } catch {
+      return false;
+    }
+  }, "Screenshot must be a secure Cloudinary image URL");
+
+const paymentScreenshotSchema = z.union([
+  dataUrlScreenshotSchema,
+  cloudinaryScreenshotSchema,
+]);
 
 const paymentProofSchema = z
   .object({
@@ -36,11 +58,19 @@ const orderedProductSchema = z.preprocess(
     name: z.string().min(1).max(300),
     quantity: z.number().int().min(1).max(10000),
     price: z.number().min(0),
+    brand: z.string().trim().max(100).optional(),
     sku: z.string().max(100).optional(),
+    variantSku: z.string().trim().max(100).optional(),
+    regularPrice: z.number().min(0).optional(),
+    salePrice: z.number().min(0).optional(),
     model: z.string().max(200).optional(),
     selectedModel: z.string().max(100).optional(),
     selectedSize: z.string().max(50).optional(),
     selectedColor: z.string().max(60).optional(),
+    selectedVariantKey: z.string().max(500).optional(),
+    selectedVariantAttributes: z
+      .record(z.string(), z.string().max(100))
+      .optional(),
     image: z.string().optional(),
   }),
 );

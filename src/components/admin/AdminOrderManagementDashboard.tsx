@@ -340,12 +340,22 @@ const ProductLines: React.FC<{
               <p className="text-[13px] font-semibold text-gray-900 leading-snug line-clamp-2">
                 {line.name}
               </p>
-              {(model || line.selectedSize || line.selectedColor) && (
+              {(model ||
+                line.selectedSize ||
+                line.selectedColor ||
+                Object.keys(line.selectedVariantAttributes || {}).length > 0) && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {model && <Chip>Model: {model}</Chip>}
                   {line.selectedSize && <Chip>Size: {line.selectedSize}</Chip>}
                   {line.selectedColor && (
                     <Chip swatch={colorHex}>{line.selectedColor}</Chip>
+                  )}
+                  {Object.entries(line.selectedVariantAttributes || {}).map(
+                    ([name, value]) => (
+                      <Chip key={name}>
+                        {name}: {value}
+                      </Chip>
+                    ),
                   )}
                 </div>
               )}
@@ -779,6 +789,9 @@ export const AdminOrderManagementDashboard: React.FC<
             p.selectedModel || p.model,
             p.selectedSize && `Size ${p.selectedSize}`,
             p.selectedColor,
+            ...Object.entries(p.selectedVariantAttributes || {}).map(
+              ([name, value]) => `${name} ${value}`,
+            ),
           ]
             .filter(Boolean)
             .join(" / "),

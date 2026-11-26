@@ -244,6 +244,8 @@ interface MergeCartLine {
   selectedModel?: string;
   selectedSize?: string;
   selectedColor?: string;
+  selectedVariantKey?: string;
+  selectedVariantAttributes?: Record<string, string>;
 }
 
 export const authenticateCustomer = async (

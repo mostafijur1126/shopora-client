@@ -10,6 +10,7 @@ import authRoutes from "./routes/authRoutes.js";
 import staffRoutes from "./routes/staffRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
+import uploadRoutes from "./routes/uploadRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import supplierRoutes from "./routes/supplierRoutes.js";
@@ -37,7 +38,6 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json({ limit: "30mb" }));
 app.use(morgan("dev"));
 
 // Rate limit: protects against brute-force / abuse on all API routes.
@@ -48,6 +48,8 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 app.use("/api", apiLimiter);
+app.use("/api/uploads", uploadRoutes);
+app.use(express.json({ limit: "30mb" }));
 
 // ---- Health check ----
 app.get("/", (_req, res) => {

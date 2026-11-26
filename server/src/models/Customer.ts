@@ -7,6 +7,8 @@ export interface ICustomerCartLine {
   selectedModel?: string;
   selectedSize?: string;
   selectedColor?: string;
+  selectedVariantKey?: string;
+  selectedVariantAttributes?: Record<string, string>;
 }
 
 export interface ICustomer extends Document {
@@ -33,6 +35,8 @@ const cartLineSchema = new Schema<ICustomerCartLine>(
     selectedModel: { type: String, trim: true, maxlength: 100 },
     selectedSize: { type: String, trim: true, maxlength: 50 },
     selectedColor: { type: String, trim: true, maxlength: 60 },
+    selectedVariantKey: { type: String, trim: true, maxlength: 500 },
+    selectedVariantAttributes: { type: Schema.Types.Mixed },
   },
   { _id: false },
 );

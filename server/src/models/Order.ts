@@ -5,11 +5,17 @@ export interface IOrderedProduct {
   name: string;
   quantity: number;
   price: number;
+  brand?: string;
   sku?: string;
+  variantSku?: string;
+  regularPrice?: number;
+  salePrice?: number;
   model?: string;
   selectedModel?: string;
   selectedSize?: string;
   selectedColor?: string;
+  selectedVariantKey?: string;
+  selectedVariantAttributes?: Record<string, string>;
   image?: string;
 }
 
@@ -61,11 +67,17 @@ const orderedProductSchema = new Schema<IOrderedProduct>(
     name: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
+    brand: { type: String, trim: true, maxlength: 100 },
     sku: { type: String },
+    variantSku: { type: String, trim: true, maxlength: 100 },
+    regularPrice: { type: Number, min: 0 },
+    salePrice: { type: Number, min: 0 },
     model: { type: String },
     selectedModel: { type: String, trim: true, maxlength: 100 },
     selectedSize: { type: String, trim: true, maxlength: 50 },
     selectedColor: { type: String, trim: true, maxlength: 60 },
+    selectedVariantKey: { type: String, trim: true, maxlength: 500 },
+    selectedVariantAttributes: { type: Schema.Types.Mixed },
     image: { type: String },
   },
   { _id: false },

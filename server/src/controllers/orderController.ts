@@ -249,7 +249,10 @@ export const createOrder = asyncHandler(
         // Not a catalogue product — only staff may sell a hand-typed item (e.g. in the manual order form).
         if (!isStaff)
           throw new AppError(`Product not found: ${item.name}`, 400);
-        lines.push({ ...item });
+        lines.push({
+          ...item,
+          regularPrice: item.regularPrice ?? item.price,
+        });
         verifiedSubtotal += item.price * item.quantity;
         continue;
       }
@@ -265,6 +268,15 @@ export const createOrder = asyncHandler(
         ...(product.colorVariants ?? []).map((color) => color.name),
       ];
       const selectedModel = item.selectedModel ?? item.model;
+      const hasDynamicVariants = Boolean(product.variantAttributes?.length);
+      const selectedVariant = hasDynamicVariants
+        ? product.variants?.find(
+            (variant) => variant.key === item.selectedVariantKey,
+          )
+        : undefined;
+      if (hasDynamicVariants && !selectedVariant) {
+        throw new AppError(`Select a valid variant for "${product.name}"`, 400);
+      }
       if (
         (selectedModel &&
           availableModels.length &&
@@ -281,7 +293,11 @@ export const createOrder = asyncHandler(
           400,
         );
       }
-      if (!product.inStock || (product.stockQty ?? 0) < item.quantity) {
+      if (
+        selectedVariant
+          ? selectedVariant.stockQty < item.quantity
+          : !product.inStock || (product.stockQty ?? 0) < item.quantity
+      ) {
         throw new AppError(
           `"${product.name}" is out of stock or has insufficient quantity`,
           400,
@@ -289,8 +305,34 @@ export const createOrder = asyncHandler(
       }
 
       // Customers always pay the database price. Staff may enter a negotiated price in the POS form.
-      const price = isStaff ? item.price : product.price;
-      lines.push({ ...item, name: product.name, price });
+      const price = isStaff
+        ? item.price
+        : selectedVariant
+          ? (selectedVariant.salePrice ?? selectedVariant.regularPrice)
+          : product.price;
+      const regularPrice =
+        selectedVariant?.regularPrice ??
+        Math.max(product.price, product.originalPrice ?? product.price);
+      const salePrice = selectedVariant
+        ? selectedVariant.salePrice
+        : product.price < regularPrice
+          ? product.price
+          : undefined;
+      const specificationBrand = Object.entries(product.specifications ?? {})
+        .find(([name]) => name.trim().toLowerCase() === "brand")?.[1];
+      lines.push({
+        ...item,
+        name: product.name,
+        price,
+        brand: product.brand?.trim() || specificationBrand?.trim() || undefined,
+        sku: product.sku,
+        variantSku: selectedVariant?.sku,
+        regularPrice,
+        salePrice,
+        selectedVariantKey: selectedVariant?.key,
+        selectedVariantAttributes: selectedVariant?.attributes,
+        image: product.image,
+      });
       verifiedSubtotal += price * item.quantity;
     }
 
@@ -322,26 +364,54 @@ export const createOrder = asyncHandler(
 
     // 3) Reserve stock atomically (a single conditional update per product), so two customers
     //    buying the last item at the same moment cannot both succeed. Undo everything if any step fails.
-    const reserved: { productId: string; quantity: number }[] = [];
+    const reserved: {
+      productId: string;
+      quantity: number;
+      variantKey?: string;
+    }[] = [];
     let orderPersisted = false;
     try {
       for (const line of lines) {
         if (!isObjectId(line.productId)) continue;
-        const updated = await Product.findOneAndUpdate(
-          {
-            _id: line.productId,
-            inStock: true,
-            stockQty: { $gte: line.quantity },
-          },
-          { $inc: { stockQty: -line.quantity } },
-        );
+        const updated = line.selectedVariantKey
+          ? await Product.findOneAndUpdate(
+              {
+                _id: line.productId,
+                inStock: true,
+                stockQty: { $gte: line.quantity },
+                variants: {
+                  $elemMatch: {
+                    key: line.selectedVariantKey,
+                    stockQty: { $gte: line.quantity },
+                  },
+                },
+              },
+              {
+                $inc: {
+                  stockQty: -line.quantity,
+                  "variants.$.stockQty": -line.quantity,
+                },
+              },
+            )
+          : await Product.findOneAndUpdate(
+              {
+                _id: line.productId,
+                inStock: true,
+                stockQty: { $gte: line.quantity },
+              },
+              { $inc: { stockQty: -line.quantity } },
+            );
         if (!updated) {
           throw new AppError(
             `"${line.name}" is out of stock or has insufficient quantity`,
             400,
           );
         }
-        reserved.push({ productId: line.productId, quantity: line.quantity });
+        reserved.push({
+          productId: line.productId,
+          quantity: line.quantity,
+          variantKey: line.selectedVariantKey,
+        });
       }
 
       const order = await Order.create({
@@ -362,11 +432,17 @@ export const createOrder = asyncHandler(
           name: l.name,
           quantity: l.quantity,
           price: l.price,
+          brand: l.brand,
           sku: l.sku,
+          variantSku: l.variantSku,
+          regularPrice: l.regularPrice,
+          salePrice: l.salePrice,
           model: l.model,
           selectedModel: l.selectedModel,
           selectedSize: l.selectedSize,
           selectedColor: l.selectedColor,
+          selectedVariantKey: l.selectedVariantKey,
+          selectedVariantAttributes: l.selectedVariantAttributes,
           image: l.image,
         })),
         items: buildItemsSummary(lines),
@@ -435,9 +511,20 @@ export const createOrder = asyncHandler(
     } catch (err) {
       if (!orderPersisted) {
         for (const r of reserved) {
-          await Product.findByIdAndUpdate(r.productId, {
-            $inc: { stockQty: r.quantity },
-          }).catch(() => undefined);
+          await Product.updateOne(
+            { _id: r.productId },
+            {
+              $inc: r.variantKey
+                ? {
+                    stockQty: r.quantity,
+                    "variants.$[variant].stockQty": r.quantity,
+                  }
+                : { stockQty: r.quantity },
+            },
+            r.variantKey
+              ? { arrayFilters: [{ "variant.key": r.variantKey }] }
+              : undefined,
+          ).catch(() => undefined);
         }
       }
       throw err;

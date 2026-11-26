@@ -8,7 +8,7 @@ import React, {
 import { Product, ColorVariant, ReviewScreenshot } from "../types";
 import { formatPrice } from "../utils/format";
 import { getWhatsAppOrderLink } from "../utils/whatsapp";
-import { CartItemOptions } from "../utils/cart";
+import { CartItemOptions, getProductVariantKey } from "../utils/cart";
 import { ProductCard } from "./ProductCard";
 import {
   ChevronLeft,
@@ -91,6 +91,23 @@ const getColorOptions = (product: Product): ColorVariant[] => {
   );
 };
 
+const getYoutubeEmbedUrl = (value: string): string | null => {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    if (hostname === "youtu.be")
+      return `https://www.youtube-nocookie.com/embed/${url.pathname.slice(1)}`;
+    if (!["youtube.com", "www.youtube.com", "m.youtube.com"].includes(hostname))
+      return null;
+    const id =
+      url.searchParams.get("v") ||
+      url.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
+    return id ? `https://www.youtube-nocookie.com/embed/${id}` : null;
+  } catch {
+    return null;
+  }
+};
+
 const WhatsAppIcon: React.FC<{ className?: string }> = ({
   className = "w-5 h-5",
 }) => (
@@ -145,20 +162,41 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
         : [product.image],
     [product],
   );
+  const variantAttributes = product.variantAttributes ?? [];
+  const showDynamicVariants = variantAttributes.length > 0;
   const colorOptions = useMemo(() => getColorOptions(product), [product]);
+  const hasVariantAttribute = (name: string) =>
+    variantAttributes.some(
+      (attribute) => attribute.name.trim().toLowerCase() === name,
+    );
 
-  const showColors = product.hasColors !== false && colorOptions.length > 0;
+  const showColors =
+    product.hasColors !== false &&
+    colorOptions.length > 0 &&
+    !hasVariantAttribute("color");
   const showSizes =
     product.hasSizes !== false &&
-    Boolean(product.sizes && product.sizes.length > 0);
-  const showModels = Boolean(product.models && product.models.length > 1);
-
+    Boolean(product.sizes && product.sizes.length > 0) &&
+    !hasVariantAttribute("size");
+  const showModels =
+    Boolean(product.models && product.models.length > 1) &&
+    !hasVariantAttribute("model");
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
+  const [selectedVariantAttributes, setSelectedVariantAttributes] = useState<
+    Record<string, string>
+  >(() =>
+    Object.fromEntries(
+      variantAttributes.map((attribute) => [
+        attribute.name,
+        attribute.values[0] || "",
+      ]),
+    ),
+  );
   const [descExpanded, setDescExpanded] = useState(false);
 
   const [notifyContact, setNotifyContact] = useState("");
@@ -235,19 +273,48 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     setSelectedColor(getColorOptions(product)[0]?.name || "");
     setSelectedModel(product.models?.[0] || product.model || "");
     setSelectedSize(product.sizes?.[0] || "");
+    setSelectedVariantAttributes(
+      Object.fromEntries(
+        (product.variantAttributes ?? []).map((attribute) => [
+          attribute.name,
+          attribute.values[0] || "",
+        ]),
+      ),
+    );
   }, [product.id]);
 
-  const isOutOfStock =
-    !product.inStock ||
-    (product.stockQty !== undefined && product.stockQty <= 0);
+  const variantSelectionComplete =
+    showDynamicVariants &&
+    variantAttributes.every((attribute) =>
+      Boolean(selectedVariantAttributes[attribute.name]),
+    );
+  const selectedVariant = variantSelectionComplete
+    ? product.variants?.find(
+        (variant) =>
+          variant.key === getProductVariantKey(selectedVariantAttributes),
+      )
+    : undefined;
+  const effectivePrice =
+    selectedVariant?.salePrice ?? selectedVariant?.regularPrice ?? product.price;
+  const effectiveRegularPrice =
+    selectedVariant?.regularPrice ?? product.originalPrice;
+  const effectiveStockQty = showDynamicVariants
+    ? selectedVariant?.stockQty ?? 0
+    : product.stockQty ?? 0;
+  const isOutOfStock = showDynamicVariants
+    ? !selectedVariant || effectiveStockQty <= 0
+    : !product.inStock || (product.stockQty !== undefined && product.stockQty <= 0);
   const isWishlisted = wishlist.includes(product.id);
   const maxQty =
-    product.stockQty && product.stockQty > 0 ? product.stockQty : 99;
+    showDynamicVariants
+      ? effectiveStockQty
+      : product.stockQty && product.stockQty > 0
+        ? product.stockQty
+        : 99;
   const lowStock =
     !isOutOfStock &&
-    product.stockQty !== undefined &&
-    product.stockQty > 0 &&
-    product.stockQty <= (product.lowStockThreshold ?? 5);
+    effectiveStockQty > 0 &&
+    effectiveStockQty <= (product.lowStockThreshold ?? 5);
 
   // Sticky mobile action bar: visible whenever the main buttons are not on screen
   useEffect(() => {
@@ -333,6 +400,8 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
     selectedModel: selectedModel || undefined,
     selectedSize: showSizes ? selectedSize || undefined : undefined,
     selectedColor: showColors ? selectedColor || undefined : undefined,
+    selectedVariantKey: selectedVariant?.key,
+    selectedVariantAttributes: selectedVariant?.attributes,
   });
 
   const handleAddToCartClick = () =>
@@ -351,7 +420,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   const handleShare = async () => {
     const shareData = {
       title: product.name,
-      text: `${product.name} — ${formatPrice(product.price)}`,
+      text: `${product.name} — ${formatPrice(effectivePrice)}`,
       url: productUrl,
     };
     try {
@@ -373,7 +442,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   };
 
   const whatsappUrl = getWhatsAppOrderLink(
-    `Assalamu Alaikum, I would like to know more about this product:\n${product.name} (${formatPrice(product.price)})\n${productUrl}`,
+    `Assalamu Alaikum, I would like to know more about this product:\n${product.name} (${formatPrice(effectivePrice)})\n${productUrl}`,
   );
 
   const handleNotifySubmit = (e: React.FormEvent) => {
@@ -459,22 +528,23 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
 
   /* ---------- derived display data ---------- */
   const hasDiscount = Boolean(
-    product.originalPrice && product.originalPrice > product.price,
+    effectiveRegularPrice && effectiveRegularPrice > effectivePrice,
   );
   const discountPercent = hasDiscount
     ? Math.round(
-        ((product.originalPrice! - product.price) / product.originalPrice!) *
+        ((effectiveRegularPrice! - effectivePrice) / effectiveRegularPrice!) *
           100,
       )
     : null;
-  const savings = hasDiscount ? product.originalPrice! - product.price : 0;
+  const savings = hasDiscount ? effectiveRegularPrice! - effectivePrice : 0;
 
   // Quick facts: only the ones this product actually has
   const quickFacts: { label: string; value: string }[] = [];
   const categoryLabel = product.categoryBn || product.category;
   if (categoryLabel)
     quickFacts.push({ label: "Category", value: categoryLabel });
-  if (product.sku) quickFacts.push({ label: "SKU", value: product.sku });
+  if (selectedVariant?.sku || product.sku)
+    quickFacts.push({ label: "SKU", value: selectedVariant?.sku || product.sku! });
   if (product.model && !showModels)
     quickFacts.push({ label: "Model", value: product.model });
   if (product.materialOrOrigin)
@@ -632,6 +702,34 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
               ))}
             </div>
           )}
+
+          {product.videos && product.videos.length > 0 && (
+            <div className="mt-4 space-y-3">
+              {product.videos.map((video, index) => {
+                const embedUrl = getYoutubeEmbedUrl(video);
+                return embedUrl ? (
+                  <iframe
+                    key={`${video}-${index}`}
+                    src={embedUrl}
+                    title={`${product.name} video ${index + 1}`}
+                    className="w-full aspect-video rounded-2xl border border-gray-100"
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    key={`${video}-${index}`}
+                    src={video}
+                    controls
+                    preload="metadata"
+                    className="w-full aspect-video rounded-2xl bg-black"
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ============ Right column: buy box + all the details ============ */}
@@ -663,12 +761,12 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
             {/* Price */}
             <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mt-3">
               <span className="text-3xl font-extrabold text-[#bb0027] font-montserrat">
-                {formatPrice(product.price)}
+                {formatPrice(effectivePrice)}
               </span>
-              {hasDiscount && (
+              {hasDiscount && effectiveRegularPrice && (
                 <>
                   <span className="text-base text-gray-400 line-through font-montserrat">
-                    {formatPrice(product.originalPrice!)}
+                    {formatPrice(effectiveRegularPrice)}
                   </span>
                   <span className="text-xs font-bold text-[#00503a] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                     Save {formatPrice(savings)}
@@ -691,7 +789,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
               )}
               {lowStock && (
                 <span className="text-xs font-semibold text-amber-600">
-                  Only {product.stockQty} left, order soon
+                  Only {effectiveStockQty} left, order soon
                 </span>
               )}
             </div>
@@ -714,8 +812,44 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           )}
 
           {/* Options */}
-          {(showColors || showModels || showSizes) && (
+          {(showColors || showModels || showSizes || showDynamicVariants) && (
             <div className="space-y-5">
+              {showDynamicVariants &&
+                variantAttributes.map((attribute) => (
+                  <div key={attribute.name}>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">
+                      {attribute.name}
+                      {selectedVariantAttributes[attribute.name] && (
+                        <span className="font-bold text-[#00503a]">
+                          : {selectedVariantAttributes[attribute.name]}
+                        </span>
+                      )}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {attribute.values.map((value) => (
+                        <button
+                          key={`${attribute.name}-${value}`}
+                          type="button"
+                          onClick={() =>
+                            setSelectedVariantAttributes((previous) => ({
+                              ...previous,
+                              [attribute.name]: value,
+                            }))
+                          }
+                          aria-pressed={
+                            selectedVariantAttributes[attribute.name] === value
+                          }
+                          className={optionBtn(
+                            selectedVariantAttributes[attribute.name] === value,
+                          )}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
               {showColors && (
                 <div>
                   <p className="text-sm font-semibold text-gray-700 mb-2">
@@ -850,7 +984,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
                 <p className="text-sm text-gray-600 mt-2.5">
                   Total for {quantity}:{" "}
                   <span className="font-extrabold text-[#bb0027] font-montserrat">
-                    {formatPrice(product.price * quantity)}
+                    {formatPrice(effectivePrice * quantity)}
                   </span>
                 </p>
               )}
@@ -1298,7 +1432,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
               {quantity > 1 ? `Total (×${quantity})` : "Price"}
             </p>
             <p className="text-base font-extrabold text-[#bb0027] font-montserrat leading-tight mt-1">
-              {formatPrice(product.price * quantity)}
+              {formatPrice(effectivePrice * quantity)}
             </p>
           </div>
           <button

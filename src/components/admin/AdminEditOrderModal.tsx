@@ -50,13 +50,19 @@ interface Line {
   uid: string;
   productId?: string;
   name: string;
+  brand?: string;
   sku?: string;
+  variantSku?: string;
   price: number;
+  regularPrice?: number;
+  salePrice?: number;
   quantity: number;
   image?: string;
   selectedModel?: string;
   selectedSize?: string;
   selectedColor?: string;
+  selectedVariantKey?: string;
+  selectedVariantAttributes?: Record<string, string>;
 }
 
 interface FormState {
@@ -198,13 +204,19 @@ const deriveInitial = (order: OrderItem): FormState => {
         // DB stores `productId`; older/local orders use `id`
         productId: raw.productId || raw.id,
         name: raw.name,
+        brand: raw.brand,
         sku: raw.sku,
+        variantSku: raw.variantSku,
         price: Number(raw.price) || 0,
+        regularPrice: raw.regularPrice,
+        salePrice: raw.salePrice,
         quantity: Number(raw.quantity) || 1,
         image: raw.image,
         selectedModel: raw.selectedModel || raw.model,
         selectedSize: raw.selectedSize,
         selectedColor: raw.selectedColor,
+        selectedVariantKey: raw.selectedVariantKey,
+        selectedVariantAttributes: raw.selectedVariantAttributes,
       };
     });
   } else {
@@ -363,7 +375,13 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
               uid: uid(),
               productId: prod.id,
               name: prod.nameEn || prod.name,
+              brand: prod.brand || undefined,
               sku: prod.sku,
+              regularPrice: Math.max(prod.price, prod.originalPrice ?? prod.price),
+              salePrice:
+                prod.originalPrice && prod.originalPrice > prod.price
+                  ? prod.price
+                  : undefined,
               price: prod.price,
               quantity: 1,
               image: prod.image,
@@ -453,14 +471,20 @@ export const AdminEditOrderModal: React.FC<AdminEditOrderModalProps> = ({
       id: i.productId || `custom-${i.uid}`,
       productId: i.productId || `custom-${i.uid}`,
       name: i.name.trim(),
+      brand: i.brand,
       sku: i.sku,
+      variantSku: i.variantSku,
       price: i.price,
+      regularPrice: i.regularPrice,
+      salePrice: i.salePrice,
       quantity: i.quantity,
       image: i.image,
       model: i.selectedModel,
       selectedModel: i.selectedModel,
       selectedSize: i.selectedSize,
       selectedColor: i.selectedColor,
+      selectedVariantKey: i.selectedVariantKey,
+      selectedVariantAttributes: i.selectedVariantAttributes,
     })) as unknown as OrderedProductSummary[];
 
     let courier: CourierAssignment | null | undefined;

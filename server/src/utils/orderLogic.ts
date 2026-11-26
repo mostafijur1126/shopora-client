@@ -25,11 +25,17 @@ export interface OrderLine {
   name: string;
   quantity: number;
   price: number;
+  brand?: string;
   sku?: string;
+  variantSku?: string;
+  regularPrice?: number;
+  salePrice?: number;
   model?: string;
   selectedModel?: string;
   selectedSize?: string;
   selectedColor?: string;
+  selectedVariantKey?: string;
+  selectedVariantAttributes?: Record<string, string>;
   image?: string;
 }
 
@@ -62,10 +68,17 @@ export const sanitizeMoney = (
 
 export const buildItemsSummary = (lines: OrderLine[]): string =>
   lines
-    .map(
-      (l) =>
-        `${l.name}${l.model ? ` [Model: ${l.model}]` : ""} (${l.quantity} pcs)`,
-    )
+    .map((line) => {
+      const selectedOptions = [
+        line.model && `Model: ${line.model}`,
+        line.selectedSize && `Size: ${line.selectedSize}`,
+        line.selectedColor && `Color: ${line.selectedColor}`,
+        ...Object.entries(line.selectedVariantAttributes || {}).map(
+          ([name, value]) => `${name}: ${value}`,
+        ),
+      ].filter(Boolean);
+      return `${line.name}${selectedOptions.length ? ` [${selectedOptions.join(", ")}]` : ""} (${line.quantity} pcs)`;
+    })
     .join(", ");
 
 // Server-side source of truth for the money on an order.

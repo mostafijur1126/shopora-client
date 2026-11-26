@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Product, OrderItem, OrderedProductSummary, CartItem } from "../types";
 import { BANGLADESH_DISTRICTS, isDhakaDistrict } from "../data/districts";
 import { formatPrice } from "../utils/format";
+import { getCartItemPrice, getCartItemStockQty } from "../utils/cart";
 import { getWhatsAppOrderLink } from "../utils/whatsapp";
 import { fetchStoreContactSettingsApi } from "../services/api";
+import { uploadPaymentProofApi } from "../utils/uploadImage";
 import {
   ArrowLeft,
   X,
@@ -64,8 +66,16 @@ const normalizePhone = (raw: string) =>
 
 const isValidBdPhone = (p: string) => /^(?:\+?88)?01[3-9]\d{8}$/.test(p);
 
-const maxQtyFor = (p: Product) =>
-  p.stockQty && p.stockQty > 0 ? p.stockQty : 99;
+const maxQtyFor = (item: CartItem) => {
+  const variant = item.product.variants?.find(
+    (candidate) => candidate.key === item.selectedVariantKey,
+  );
+  return variant
+    ? variant.stockQty
+    : item.product.stockQty && item.product.stockQty > 0
+      ? getCartItemStockQty(item)
+      : 99;
+};
 
 const variantText = (it: CartItem) => {
   const parts: string[] = [];
@@ -73,6 +83,9 @@ const variantText = (it: CartItem) => {
   if (model) parts.push(`Model: ${model}`);
   if (it.selectedSize) parts.push(`Size: ${it.selectedSize}`);
   if (it.selectedColor) parts.push(`Color: ${it.selectedColor}`);
+  Object.entries(it.selectedVariantAttributes || {}).forEach(([name, value]) =>
+    parts.push(`${name}: ${value}`),
+  );
   return parts.join(", ");
 };
 
@@ -190,6 +203,8 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
   const [paymentAmount, setPaymentAmount] = useState("");
   const [transactionId, setTransactionId] = useState("");
   const [paymentScreenshot, setPaymentScreenshot] = useState("");
+  const [paymentScreenshotUploading, setPaymentScreenshotUploading] =
+    useState(false);
   const [paymentProofError, setPaymentProofError] = useState("");
   const [paymentNumberCopied, setPaymentNumberCopied] = useState(false);
   const [paymentNumberCopyError, setPaymentNumberCopyError] = useState("");
@@ -224,6 +239,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
     setPaymentAmount("");
     setTransactionId("");
     setPaymentScreenshot("");
+    setPaymentScreenshotUploading(false);
     setPaymentProofError("");
     setPaymentNumberCopied(false);
     setPaymentNumberCopyError("");
@@ -289,7 +305,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
     const updatedItems = items.map((item, i) => {
       if (i !== index) return item;
       const next = Math.min(
-        maxQtyFor(item.product),
+        maxQtyFor(item),
         Math.max(1, item.quantity + delta),
       );
       return { ...item, quantity: next };
@@ -307,7 +323,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
 
   /* ----- calculations ----- */
   const subtotal = items.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
+    (sum, item) => sum + getCartItemPrice(item) * item.quantity,
     0,
   );
   const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -353,6 +369,10 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
     const hasPaymentProof = Boolean(
       transactionId.trim() || paymentScreenshot,
     );
+    if (isMfsPayment && paymentScreenshotUploading) {
+      setPaymentProofError("Wait for the screenshot upload to finish.");
+      return false;
+    }
     if (
       isMfsPayment &&
       (!Number.isFinite(Number(paymentAmount)) ||
@@ -423,7 +443,9 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
       selectedModel: it.selectedModel || it.product.model,
       selectedSize: it.selectedSize,
       selectedColor: it.selectedColor,
-      price: it.product.price,
+      selectedVariantKey: it.selectedVariantKey,
+      selectedVariantAttributes: it.selectedVariantAttributes,
+      price: getCartItemPrice(it),
       quantity: it.quantity,
       image: it.product.image?.startsWith("data:")
         ? undefined
@@ -810,7 +832,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                   {items.length > 0 ? (
                     <ul className="space-y-2.5">
                       {items.map((item, index) => {
-                        const max = maxQtyFor(item.product);
+                        const max = maxQtyFor(item);
                         const variant = variantText(item);
                         const atMax = item.quantity >= max;
                         const lowStock =
@@ -858,7 +880,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                               <div className="mt-auto pt-2 flex items-center justify-between gap-2">
                                 <span className="text-sm font-extrabold text-[#00503a] font-montserrat">
                                   {formatPrice(
-                                    item.product.price * item.quantity,
+                                    getCartItemPrice(item) * item.quantity,
                                   )}
                                 </span>
 
@@ -1146,6 +1168,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                         type="button"
                         aria-pressed={paymentMethod === method}
                         onClick={() => {
+                          if (paymentScreenshotUploading) return;
                           if (paymentMethod !== method) {
                             setTransactionId("");
                             setPaymentScreenshot("");
@@ -1158,6 +1181,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                           }
                           setPaymentProofError("");
                         }}
+                        disabled={paymentScreenshotUploading}
                         className={`text-left rounded-2xl border-2 p-3.5 transition-colors ${
                           paymentMethod === method
                             ? method === "nagad"
@@ -1301,6 +1325,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                           key={paymentMethod}
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
+                          disabled={paymentScreenshotUploading}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             setPaymentProofError("");
@@ -1308,6 +1333,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                               setPaymentScreenshot("");
                               return;
                             }
+                            setPaymentScreenshot("");
                             if (
                               !["image/jpeg", "image/png", "image/webp"].includes(
                                 file.type,
@@ -1320,22 +1346,28 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                               e.target.value = "";
                               return;
                             }
-                            const reader = new FileReader();
-                            reader.onload = () => {
-                              if (typeof reader.result === "string") {
-                                setPaymentScreenshot(reader.result);
-                              }
-                            };
-                            reader.onerror = () => {
-                              setPaymentProofError(
-                                "Could not read the screenshot. Please try another image.",
+                            setPaymentScreenshotUploading(true);
+                            void uploadPaymentProofApi(file)
+                              .then(setPaymentScreenshot)
+                              .catch((error: unknown) => {
+                                setPaymentProofError(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Could not upload the screenshot. Please try again.",
+                                );
+                              })
+                              .finally(() =>
+                                setPaymentScreenshotUploading(false),
                               );
-                            };
-                            reader.readAsDataURL(file);
                           }}
                           className="mt-1.5 block w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:font-bold file:text-[#00503a]"
                         />
                       </label>
+                      {paymentScreenshotUploading && (
+                        <p role="status" className="text-xs text-gray-600">
+                          Uploading payment screenshot…
+                        </p>
+                      )}
                       {paymentScreenshot && (
                         <div className="flex items-center gap-3">
                           <img
@@ -1345,6 +1377,7 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                           />
                           <button
                             type="button"
+                            disabled={paymentScreenshotUploading}
                             onClick={() => setPaymentScreenshot("")}
                             className="text-xs font-bold text-red-600"
                           >
@@ -1418,7 +1451,11 @@ export const DirectOrderModal: React.FC<DirectOrderModalProps> = ({
                 <button
                   type="submit"
                   form="checkout-form"
-                  disabled={isSubmitting || items.length === 0}
+                  disabled={
+                    isSubmitting ||
+                    paymentScreenshotUploading ||
+                    items.length === 0
+                  }
                   className="flex-1 h-12 bg-[#00503a] hover:bg-[#003828] disabled:opacity-70 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm sm:text-base shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
                 >
                   {isSubmitting ? (

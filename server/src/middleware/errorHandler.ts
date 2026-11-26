@@ -18,7 +18,8 @@ export const asyncHandler =
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
-  const statusCode = err instanceof AppError ? err.statusCode : err.statusCode || 500;
+  const statusCode =
+    err instanceof AppError ? err.statusCode : err.statusCode || err.status || 500;
 
   // Never leak internal stack traces or raw DB errors to the client.
   const message =
