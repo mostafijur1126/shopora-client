@@ -43,7 +43,31 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
   const [isFocused, setIsFocused] = useState(false);
 
   // Duplicate products for seamless infinite scrolling
-  const infiniteProducts = [...products, ...products];
+  const [shouldLoop, setShouldLoop] = useState(false);
+
+  useEffect(() => {
+    const slider = sliderRef.current;
+    if (!slider) return;
+
+    const check = () => {
+      const firstCard = slider.firstElementChild as HTMLElement | null;
+      if (!firstCard) return;
+
+      const gap = Number.parseFloat(getComputedStyle(slider).columnGap) || 0;
+      const cardWidth = firstCard.getBoundingClientRect().width;
+      const totalWidth =
+        cardWidth * products.length + gap * (products.length - 1);
+
+      setShouldLoop(totalWidth > slider.clientWidth + 1);
+    };
+
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(slider);
+    return () => observer.disconnect();
+  }, [products.length]);
+
+  const infiniteProducts = shouldLoop ? [...products, ...products] : products;
 
   // Move only from right to left
   const moveSlider = () => {
@@ -72,7 +96,8 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
       return;
     }
 
-    const loopWidth = slider.scrollWidth / 2;
+    const gap = Number.parseFloat(getComputedStyle(slider).columnGap) || 0;
+    const loopWidth = (slider.scrollWidth + gap) / 2;
 
     if (slider.scrollLeft >= loopWidth) {
       isResettingRef.current = true;
@@ -87,7 +112,7 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
 
   // Auto slide: Right to Left only
   useEffect(() => {
-    if (products.length < 2) return;
+    if (!shouldLoop) return;
 
     const timer = window.setInterval(() => {
       const slider = sliderRef.current;
@@ -117,7 +142,7 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
     }, 4500);
 
     return () => window.clearInterval(timer);
-  }, [isHovered, isFocused, products.length]);
+  }, [isHovered, isFocused, shouldLoop]);
 
   return (
     <section
@@ -156,14 +181,16 @@ export const CategoryProductSection: React.FC<CategoryProductSectionProps> = ({
 
         {/* Navigation */}
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={moveSlider}
-            aria-label={`Next ${categoryName} products`}
-            className="hidden lg:flex w-9 h-9 items-center justify-center rounded-lg border border-gray-200 text-[#00503a] hover:bg-[#e7f6f0] transition-colors cursor-pointer"
-          >
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {shouldLoop && (
+            <button
+              type="button"
+              onClick={moveSlider}
+              aria-label={`Next ${categoryName} products`}
+              className="hidden lg:flex w-9 h-9 items-center justify-center rounded-lg border border-gray-200 text-[#00503a] hover:bg-[#e7f6f0] transition-colors cursor-pointer"
+            >
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
 
           <a
             href={viewAllUrl}
